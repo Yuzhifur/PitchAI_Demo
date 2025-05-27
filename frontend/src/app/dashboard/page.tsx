@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { projectApi } from "@/lib/api";
+import Layout from '@/components/Layout';
 
 interface Project {
   id: string;
@@ -14,37 +15,42 @@ interface Project {
   created_at: string;
 }
 
+interface Statistics {
+  pending_review: number;
+  completed: number;
+  needs_info: number;
+  recent_projects: Project[];
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // mock统计数据
-  const stats = [
-    { icon: "fa-inbox", color: "from-purple-500 to-pink-400", label: "待评审", value: 5 },
-    { icon: "fa-check-circle", color: "from-green-400 to-blue-400", label: "已完成", value: 12 },
-    { icon: "fa-exclamation-circle", color: "from-yellow-400 to-orange-400", label: "补充信息待处理", value: 2 },
-  ];
-
   useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchData = async () => {
       try {
-        const response = await projectApi.list({});
-        setProjects(response.data.items);
+        const [projectsResponse, statisticsResponse] = await Promise.all([
+          projectApi.list({}),
+          projectApi.getStatistics()
+        ]);
+        setProjects(projectsResponse.data.items);
+        setStatistics(statisticsResponse.data);
       } catch (err: any) {
-        setError(err.response?.data?.message || "获取项目列表失败");
+        setError(err.response?.data?.message || "获取数据失败");
       } finally {
         setLoading(false);
       }
     };
-    fetchProjects();
+    fetchData();
   }, []);
 
   // 状态标签样式
   const getStatusTag = (status: string) => {
     switch (status) {
-      case "processing":
+      case "pending_review":
         return (
           <span className="inline-block px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs">待评审</span>
         );
@@ -52,7 +58,7 @@ export default function DashboardPage() {
         return (
           <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs">已完成</span>
         );
-      case "pending_info":
+      case "needs_info":
         return (
           <span className="inline-block px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs">补充信息</span>
         );
@@ -63,15 +69,30 @@ export default function DashboardPage() {
     }
   };
 
+  // 统计数据配置
+  const stats = statistics ? [
+    { 
+      icon: "fa-inbox", 
+      color: "from-purple-500 to-pink-400", 
+      label: "待评审", 
+      value: statistics.pending_review 
+    },
+    { 
+      icon: "fa-check-circle", 
+      color: "from-green-400 to-blue-400", 
+      label: "已完成", 
+      value: statistics.completed 
+    },
+    { 
+      icon: "fa-exclamation-circle", 
+      color: "from-yellow-400 to-orange-400", 
+      label: "补充信息待处理", 
+      value: statistics.needs_info 
+    },
+  ] : [];
+
   return (
-    <div className="min-h-screen flex flex-col" style={{ fontFamily: 'Inter, sans-serif', background: 'linear-gradient(135deg, #f8fafc 0%, #f3e8ff 100%)' }}>
-      {/* 顶部品牌栏 */}
-      <header className="w-full py-4 px-8 bg-white shadow flex items-center justify-between">
-        <div className="flex items-center">
-          <span className="text-2xl font-extrabold bg-gradient-to-tr from-purple-500 to-pink-400 bg-clip-text text-transparent tracking-wide mr-2">PitchAI</span>
-        </div>
-        <img src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=facearea&w=96&h=96&facepad=2" alt="avatar" className="w-10 h-10 rounded-full border shadow" />
-      </header>
+    <Layout>
       <main className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-6xl mx-auto py-12">
           {/* 欢迎区和统计卡片 */}
@@ -145,9 +166,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
-      <footer className="w-full py-4 text-center text-gray-400 text-sm">© 2024 PitchAI</footer>
       {/* 引入FontAwesome CDN */}
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    </div>
+    </Layout>
   );
 } 

@@ -62,7 +62,7 @@ CREATE TABLE projects (
     enterprise_name VARCHAR(100) NOT NULL,  -- 企业名称
     project_name VARCHAR(100) NOT NULL,     -- 项目名称
     description TEXT,                       -- 项目描述（可选）
-    status VARCHAR(20) NOT NULL,            -- 'processing', 'completed', 'failed'
+    status VARCHAR(20) NOT NULL,            -- 'pending_review', 'in_review', 'completed', 'needs_info'
     total_score DECIMAL(5,2),              -- 总分
     review_result VARCHAR(20),             -- 'pass', 'fail', 'pending'
     created_by UUID REFERENCES users(id),   -- 创建人
@@ -134,6 +134,23 @@ CREATE TABLE missing_information (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+```
+
+### 2.8 评分历史表 (review_history)
+```sql
+CREATE TABLE review_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID REFERENCES projects(id),
+    total_score DECIMAL(5,2) NOT NULL,
+    dimensions JSONB NOT NULL,              -- 存储所有维度的评分详情
+    modified_by UUID REFERENCES users(id),  -- 修改人
+    modification_notes TEXT,                -- 修改说明
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 评分历史表索引
+CREATE INDEX idx_review_history_project_id ON review_history(project_id);
+CREATE INDEX idx_review_history_created_at ON review_history(created_at);
 ```
 
 ## 3. 主要数据关系

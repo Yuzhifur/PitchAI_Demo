@@ -56,9 +56,38 @@
 }
 ```
 
-## 2. 项目相关 API
+## 2. Dashboard 相关 API
 
-### 2.1 创建项目
+### 2.1 获取项目统计信息
+- **GET** `/projects/statistics`
+- **描述**: 获取项目统计信息和最近评审的项目
+- **响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "pending_review": "number",
+    "completed": "number",
+    "needs_info": "number",
+    "recent_projects": [
+      {
+        "id": "uuid",
+        "enterprise_name": "string",
+        "project_name": "string",
+        "status": "string",
+        "total_score": "number",
+        "review_result": "string",
+        "created_at": "string"
+      }
+    ]
+  }
+}
+```
+
+## 3. 项目相关 API
+
+### 3.1 创建项目
 - **POST** `/projects`
 - **描述**: 创建新项目
 - **请求体**:
@@ -85,7 +114,7 @@
 }
 ```
 
-### 2.2 获取项目列表
+### 3.2 获取项目列表
 - **GET** `/projects`
 - **描述**: 获取项目列表
 - **查询参数**:
@@ -115,7 +144,7 @@
 }
 ```
 
-### 2.3 获取项目详情
+### 3.3 获取项目详情
 - **GET** `/projects/{project_id}`
 - **描述**: 获取项目详细信息
 - **响应**:
@@ -144,9 +173,105 @@
 }
 ```
 
-## 3. BP文档相关 API
+### 3.4 获取项目评审详情
+- **GET** `/projects/{project_id}/review-details`
+- **描述**: 获取项目评审详细信息，包括当前评分和历史记录
+- **响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "basic_info": {
+      "id": "uuid",
+      "enterprise_name": "string",
+      "project_name": "string",
+      "status": "string"
+    },
+    "current_review": {
+      "total_score": "number",
+      "dimensions": [
+        {
+          "dimension": "string",
+          "score": "number",
+          "max_score": "number",
+          "comments": "string",
+          "sub_dimensions": [
+            {
+              "sub_dimension": "string",
+              "score": "number",
+              "max_score": "number",
+              "comments": "string"
+            }
+          ]
+        }
+      ],
+      "modified_by": "string",
+      "modified_at": "string"
+    },
+    "review_history": [
+      {
+        "review_id": "uuid",
+        "total_score": "number",
+        "dimensions": [...],
+        "modified_by": "string",
+        "modified_at": "string",
+        "modification_notes": "string"
+      }
+    ],
+    "missing_info": [
+      {
+        "dimension": "string",
+        "information_type": "string",
+        "description": "string"
+      }
+    ]
+  }
+}
+```
 
-### 3.1 上传BP文档
+### 3.5 更新项目评分
+- **PUT** `/projects/{project_id}/review`
+- **描述**: 更新项目评分
+- **请求体**:
+```json
+{
+  "total_score": "number",
+  "dimensions": [
+    {
+      "dimension": "string",
+      "score": "number",
+      "max_score": "number",
+      "comments": "string",
+      "sub_dimensions": [
+        {
+          "sub_dimension": "string",
+          "score": "number",
+          "max_score": "number",
+          "comments": "string"
+        }
+      ]
+    }
+  ],
+  "modification_notes": "string"
+}
+```
+- **响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "review_id": "uuid",
+    "total_score": "number",
+    "modified_at": "string"
+  }
+}
+```
+
+## 4. BP文档相关 API
+
+### 4.1 上传BP文档
 - **POST** `/projects/{project_id}/business-plans`
 - **描述**: 上传商业计划书
 - **Content-Type**: `multipart/form-data`
@@ -167,7 +292,7 @@
 }
 ```
 
-### 3.2 获取BP文档状态
+### 4.2 获取BP文档状态
 - **GET** `/projects/{project_id}/business-plans/status`
 - **描述**: 获取BP文档处理状态
 - **响应**:
@@ -179,59 +304,6 @@
     "status": "string",
     "progress": "number",
     "message": "string"
-  }
-}
-```
-
-## 4. 评分相关 API
-
-### 4.1 获取项目评分
-- **GET** `/projects/{project_id}/scores`
-- **描述**: 获取项目评分详情
-- **响应**:
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "total_score": "number",
-    "dimensions": [
-      {
-        "dimension": "string",
-        "score": "number",
-        "max_score": "number",
-        "comments": "string",
-        "sub_dimensions": [
-          {
-            "sub_dimension": "string",
-            "score": "number",
-            "max_score": "number",
-            "comments": "string"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-### 4.2 获取缺失信息
-- **GET** `/projects/{project_id}/missing-information`
-- **描述**: 获取项目缺失信息列表
-- **响应**:
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "items": [
-      {
-        "dimension": "string",
-        "information_type": "string",
-        "description": "string",
-        "status": "string"
-      }
-    ]
   }
 }
 ```
