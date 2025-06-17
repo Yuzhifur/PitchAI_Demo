@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 class Settings(BaseSettings):
     # 应用配置
     APP_ENV: str = os.getenv("APP_ENV", "development")
@@ -17,8 +16,9 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
 
-    # Haystack配置
-    HAYSTACK_API_KEY: str = os.getenv("HAYSTACK_API_KEY", "")
+    # DeepSeek配置 (替换Haystack)
+    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
+    DEEPSEEK_BASE_URL: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 
     # JWT配置
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
@@ -29,6 +29,5 @@ class Settings(BaseSettings):
 
     class Config:
         case_sensitive = True
-
 
 settings = Settings()

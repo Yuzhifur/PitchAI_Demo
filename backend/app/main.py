@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 from .core.config.settings import settings
-from .api.v1 import business_plans
+from .api.v1 import business_plans, evaluations
 
 # 加载环境变量
 load_dotenv()
@@ -24,6 +24,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.include_router(
+    evaluations.router, prefix=settings.API_PREFIX, tags=["评估"]
 )
 
 

@@ -1,7 +1,10 @@
 fastapi
 uvicorn[standard]
-haystack-ai
 python-dotenv
 asyncpg
 sqlalchemy
 httpx
+openai  # DeepSeek uses OpenAI-compatible API
+PyPDF2  # For direct PDF processing
+dotenv
+supabase

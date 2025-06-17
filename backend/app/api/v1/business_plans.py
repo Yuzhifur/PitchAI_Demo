@@ -7,11 +7,11 @@ from ...models.business_plan import (
     BusinessPlanStatus,
 )
 from ...services.storage import storage_service
-from ...services.haystack.client import haystack_client
+from ...services.document.processor import document_processor
+from ...services.evaluation.deepseek_client import deepseek_client
 from ...core.database import db
 
 router = APIRouter()
-
 
 @router.post("/projects/{project_id}/business-plans", response_model=BusinessPlanInDB)
 async def upload_business_plan(project_id: str, file: UploadFile = File(...)):
@@ -47,11 +47,15 @@ async def upload_business_plan(project_id: str, file: UploadFile = File(...)):
 
     # 异步处理文档
     try:
-        await haystack_client.process_document(file_path)
+        # 提取文本并评估
+        document_text = await document_processor.extract_text_from_pdf(file_path)
+        evaluation_result = await deepseek_client.evaluate_business_plan(document_text)
+
         # 更新状态为已完成
         supabase.table("business_plans").update(
             {"status": BusinessPlanStatus.COMPLETED}
         ).eq("id", bp_id).execute()
+
     except Exception as e:
         # 更新状态为失败
         supabase.table("business_plans").update(
@@ -60,7 +64,6 @@ async def upload_business_plan(project_id: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"处理BP文档失败: {str(e)}")
 
     return BusinessPlanInDB(id=bp_id, **bp_data.model_dump())
-
 
 @router.get(
     "/projects/{project_id}/business-plans/status", response_model=BusinessPlanInDB
