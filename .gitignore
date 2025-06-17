@@ -14,7 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Remove global lib/ ignore - this was the problem!
+# lib/
 lib64/
 parts/
 sdist/
@@ -172,3 +173,59 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Frontend specific ignores
+# Node modules
+frontend/node_modules/
+frontend/mock/node_modules/
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Frontend dependencies and logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# Package lock files (you may want to include these)
+# frontend/package-lock.json
+# frontend/mock/package-lock.json
+
+# Environment files
+frontend/.env*
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Vercel
+frontend/.vercel
+
+# TypeScript build info
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup

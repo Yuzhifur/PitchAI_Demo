@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 from .core.config.settings import settings
-from .api.v1 import business_plans, evaluations
+from .api.v1 import business_plans, evaluations, projects
 
 # 加载环境变量
 load_dotenv()
@@ -26,27 +26,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(
-    evaluations.router, prefix=settings.API_PREFIX, tags=["评估"]
-)
-
-
 # 健康检查
 @app.get("/ping", tags=["Health"])
 def health_check():
     return {"status": "ok", "version": "1.0.0"}
 
-
-# 导入路由
-# from .api.v1 import auth, projects, business_plans, reports
-
 # 注册路由
-# app.include_router(auth.router, prefix=settings.API_PREFIX, tags=["认证"])
-# app.include_router(projects.router, prefix=settings.API_PREFIX, tags=["项目"])
+app.include_router(
+    projects.router, prefix=settings.API_PREFIX, tags=["项目"]
+)
 app.include_router(
     business_plans.router, prefix=settings.API_PREFIX, tags=["商业计划书"]
 )
-# app.include_router(reports.router, prefix=settings.API_PREFIX, tags=["报告"])
+app.include_router(
+    evaluations.router, prefix=settings.API_PREFIX, tags=["评估"]
+)
 
 if __name__ == "__main__":
     import uvicorn

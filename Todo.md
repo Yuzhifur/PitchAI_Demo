@@ -43,7 +43,6 @@ I'll search the project knowledge to understand what features are working in thi
    - Statistics and dashboard data
 
 2. **Document Processing**
-   - Haystack integration for PDF document analysis
    - Automatic text extraction and processing
    - Document storage service with organized file management
 
@@ -60,7 +59,6 @@ I'll search the project knowledge to understand what features are working in thi
 ### **AI/ML Features**
 
 1. **Document Analysis**
-   - Haystack pipeline for business plan processing
    - Text preprocessing and embedding generation
    - Document retrieval and query capabilities
 
@@ -68,53 +66,6 @@ I'll search the project knowledge to understand what features are working in thi
    - Multi-dimensional automated scoring framework
    - Comment generation for evaluation insights
    - Missing information detection
-
-### **Technical Infrastructure**
-
-1. **Frontend Stack**
-   - Next.js 14 with TypeScript
-   - Tailwind CSS for styling
-   - React Query for API state management
-   - Shadcn/ui component library
-
-2. **Backend Stack**
-   - FastAPI with Python
-   - Haystack for document processing
-   - SQLAlchemy for database ORM
-   - Uvicorn ASGI server
-
-3. **Development Tools**
-   - Mock server for development (`frontend/mock/server.js`)
-   - Environment configuration management
-   - CORS middleware for cross-origin requests
-
-### **Working Demo Features**
-
-The demo includes fully functional:
-- Project creation and management workflow
-- Business plan upload with real-time status updates
-- Multi-dimensional scoring interface
-- Dashboard with statistics and project overview
-- Responsive UI with modern design
-- Mock API server providing realistic data responses
-
-This appears to be a comprehensive business plan evaluation platform designed to help investors and incubators systematically review and score startup projects across multiple evaluation dimensions.
-
-Based on my analysis of the code, I can answer both of your questions:
-
-## **Haystack Model Being Used**
-
-The system is using **`sentence-transformers/all-MiniLM-L6-v2`** as the embedding model in the Haystack pipeline. This is specified in the `HaystackClient` class:
-
-```python
-# 添加检索节点
-retriever = EmbeddingRetriever(
-    document_store=self.document_store,
-    embedding_model="sentence-transformers/all-MiniLM-L6-v2",
-)
-```
-
-This is a lightweight sentence transformer model that converts text into embeddings for document retrieval, but it's **not actually performing the scoring**. The current Haystack setup is only doing document preprocessing and retrieval - it's missing the actual LLM integration for evaluation.
 
 ## **How the Scoring System Should Work (But Currently Doesn't)**
 
@@ -148,14 +99,6 @@ The system should use an **LLM (likely OpenAI's GPT model)** to analyze the extr
 - **Financial Status (5 points)**: Revenue situation, cost control, cash flow
 - **Financing Needs (5 points)**: Capital requirements, financing plan, valuation reasonableness
 
-### **Current Implementation Gap**
-
-**The scoring functionality is currently incomplete**. The code shows:
-
-1. **Haystack is only set up for document processing** - text extraction and embedding generation
-2. **No LLM integration for evaluation** - there's an `OPENAI_API_KEY` in the environment variables but no OpenAI client implementation
-3. **Mock scoring data** - the frontend displays hardcoded scores from the mock server
-4. **Missing evaluation logic** - no actual algorithm to analyze document content and generate scores
 
 ### **What's Missing for Full Functionality**
 
@@ -182,12 +125,6 @@ Let me analyze the codebase to see which features have actual code implementatio
 - **✅ Environment configuration** - Settings management with proper environment variable handling
 - **✅ Database migrations** - SQL scripts for table creation with proper relationships
 
-### **API Endpoints (Fully Implemented)**
-- **✅ Business plan upload** - Complete file upload with validation, database storage, error handling
-- **✅ Project CRUD operations** - Create, read, update, delete with proper database integration
-- **✅ Health check endpoint** - Working `/ping` endpoint
-- **✅ Business plan status tracking** - Real database queries for processing status
-
 ### **Frontend Infrastructure**
 - **✅ Next.js 14 setup** - Complete modern React framework with TypeScript
 - **✅ Tailwind CSS styling** - Comprehensive design system implementation
@@ -204,10 +141,6 @@ Let me analyze the codebase to see which features have actual code implementatio
 - **✅ Score editing interface** - Interactive forms for modifying evaluation scores
 - **✅ Report download functionality** - File download handling
 
-### **Document Processing**
-- **✅ Haystack pipeline setup** - Document preprocessing, text extraction, embedding generation
-- **✅ PDF document handling** - File validation, storage, processing workflow
-- **✅ Document store integration** - InMemoryDocumentStore with retrieval capabilities
 
 ## **❌ What's Missing/Incomplete**
 
@@ -226,156 +159,311 @@ Let me analyze the codebase to see which features have actual code implementatio
 - **❌ User authentication** - JWT setup exists but no actual auth implementation
 - **❌ Role-based access** - Database schema supports it but no enforcement logic
 
-## **Summary**
+### **Document Processing**
 
-**About 80% of the application infrastructure is properly implemented** with real code, proper error handling, and working data flows. The main gap is the **AI evaluation engine** that would analyze documents and generate scores.
+### **API Endpoints**
 
-The demo is impressive because:
-- All the **plumbing is there** - database connections, file handling, API structure
-- **Frontend-backend integration works** - real HTTP calls, proper data flow
-- **Modern development practices** - TypeScript, proper component architecture, environment management
-- **Production-ready patterns** - Error handling, validation, proper project structure
+# PitchAI Backend - Missing API Endpoints Implementation Guide
 
-To make it fully functional, you'd primarily need to:
-1. Add OpenAI API integration for LLM evaluation
-2. Implement the scoring algorithm logic
-3. Connect the Haystack document processing to the evaluation system
-4. Add a few missing API endpoints
+## Current Status Overview
 
-The architectural foundation is solid and production-ready.
+### ✅ **Currently Implemented**
+- Health check: `GET /ping`
+- Business plan upload: `POST /projects/{project_id}/business-plans`
+- Business plan status: `GET /projects/{project_id}/business-plans/status`
+- Evaluation results: `GET /projects/{project_id}/evaluation`
 
-Let me search for more specific information about the intended architecture for the scoring system:Based on my analysis of the codebase, here's a comprehensive breakdown of Haystack's role and the intended scoring system architecture:
+### ❌ **Missing - High Priority**
+The following endpoints are **required by the frontend** but not implemented in the backend:
 
-## **Haystack's Current Role: Document Processing Only**
+---
 
-### **What Haystack IS Doing Currently:**
-```python
-# Current Haystack Pipeline
-pipeline = Pipeline()
-├── PreProcessor (text cleaning, chunking into 500-word segments)
-├── EmbeddingRetriever (sentence-transformers/all-MiniLM-L6-v2)
-└── InMemoryDocumentStore (storing processed documents)
+## 1. **Project Management Endpoints** (Critical)
+
+### 1.1 Get Project Statistics
+```http
+GET /api/v1/projects/statistics
+```
+**Status:** ❌ Missing
+**Used by:** Dashboard page
+**Frontend calls:** `projectApi.getStatistics()`
+
+**Expected Response:**
+```json
+{
+  "pending_review": 20,
+  "completed": 11,
+  "needs_info": 5,
+  "recent_projects": [
+    {
+      "id": "uuid",
+      "enterprise_name": "string",
+      "project_name": "string",
+      "status": "pending_review|completed|needs_info",
+      "total_score": 88,
+      "review_result": "pass|fail|conditional",
+      "created_at": "2024-05-01T12:00:00Z"
+    }
+  ]
+}
 ```
 
-**Haystack's current function is limited to:**
-1. **PDF Document Processing** - Text extraction and cleaning
-2. **Text Chunking** - Breaking documents into 500-word segments with 50-word overlap
-3. **Embedding Generation** - Converting text to vector embeddings using `sentence-transformers/all-MiniLM-L6-v2`
-4. **Document Storage** - Storing processed chunks in an in-memory document store
-5. **Document Retrieval** - Enabling queries to find relevant document sections
+### 1.2 List Projects
+```http
+GET /api/v1/projects?page=1&size=10&status=completed&search=AI
+```
+**Status:** ❌ Missing
+**Used by:** Dashboard, History pages
+**Frontend calls:** `projectApi.list(params)`
 
-### **What Haystack is NOT Doing:**
-- ❌ **No LLM Integration** - No actual language model for evaluation
-- ❌ **No Scoring Logic** - No evaluation or scoring algorithms
-- ❌ **No Agent Framework** - No agentic behavior or multi-step reasoning
-
-## **Intended Architecture: Hybrid Approach**
-
-Based on the PRD and environment configuration, the intended system would use **both Haystack AND direct OpenAI API calls**:
-
-### **Phase 1: Haystack for Document Processing**
-```python
-# Document Processing Pipeline (Already Implemented)
-PDF → Haystack Pipeline → Structured Document Chunks → Document Store
+**Expected Response:**
+```json
+{
+  "total": 45,
+  "items": [
+    {
+      "id": "uuid",
+      "enterprise_name": "string",
+      "project_name": "string",
+      "description": "string",
+      "status": "pending_review|completed|needs_info",
+      "total_score": 88,
+      "review_result": "pass|fail|conditional",
+      "created_at": "2024-05-01T12:00:00Z"
+    }
+  ]
+}
 ```
 
-### **Phase 2: OpenAI API for Evaluation (Missing)**
-```python
-# Intended Scoring Pipeline (Not Implemented)
-Document Chunks → OpenAI API Calls → Dimension-specific Evaluation → Scores + Comments
+### 1.3 Create Project
+```http
+POST /api/v1/projects
+```
+**Status:** ❌ Missing
+**Used by:** New project page
+**Frontend calls:** `projectApi.create(data)`
+
+**Request Body:**
+```json
+{
+  "enterprise_name": "TechFlow AI",
+  "project_name": "No-code AI Platform",
+  "description": "Revolutionary AI platform for enterprises"
+}
 ```
 
-## **No Agents Currently - But Should There Be?**
+### 1.4 Get Project Details
+```http
+GET /api/v1/projects/{project_id}
+```
+**Status:** ❌ Missing
+**Used by:** Project detail pages
+**Frontend calls:** `projectApi.getDetail(projectId)`
 
-### **Current Design: Direct API Calls**
-The current architecture suggests **direct OpenAI API integration** rather than Haystack agents:
-
-```python
-# Intended Implementation (Missing)
-openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-# For each evaluation dimension:
-def evaluate_team_capability(document_chunks):
-    prompt = """
-    Analyze the following business plan sections for team capability.
-    Score based on: team background (10pts), completeness (10pts), execution (10pts)
-
-    Document sections: {document_chunks}
-
-    Return JSON: {{"score": X, "comments": "...", "sub_scores": [...]}}
-    """
-    return openai_client.chat.completions.create(...)
+**Expected Response:**
+```json
+{
+  "id": "uuid",
+  "enterprise_name": "string",
+  "project_name": "string",
+  "description": "string",
+  "status": "pending_review|completed|needs_info",
+  "total_score": 88,
+  "review_result": "pass|fail|conditional",
+  "created_at": "2024-05-01T12:00:00Z",
+  "updated_at": "2024-05-02T12:00:00Z"
+}
 ```
 
-### **Why Not Haystack Agents?**
+---
 
-**Arguments Against Agents:**
-- **Simpler Use Case** - Each dimension evaluation is a straightforward prompt→response pattern
-- **Cost Control** - Direct API calls provide better cost visibility and control
-- **Deterministic Scoring** - Less complexity than multi-step agent reasoning
-- **Easier Debugging** - Simpler to trace and debug evaluation logic
+## 2. **Scoring & Evaluation Endpoints** (Critical)
 
-**Arguments For Agents (If Implemented):**
-- **Complex Analysis** - Could break down evaluation into multiple reasoning steps
-- **Cross-dimensional Analysis** - Agents could consider relationships between dimensions
-- **Iterative Refinement** - Could ask follow-up questions or request clarifications
+### 2.1 Get Project Scores
+```http
+GET /api/v1/projects/{project_id}/scores
+```
+**Status:** ❌ Missing
+**Used by:** Project detail pages
+**Frontend calls:** `scoreApi.getScores(projectId)`
 
-## **Recommended Implementation Approach**
-
-### **Option 1: Direct OpenAI Integration (Simpler)**
-```python
-class BusinessPlanEvaluator:
-    def __init__(self):
-        self.openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.haystack_client = haystack_client
-
-    async def evaluate_project(self, project_id: str):
-        # 1. Get processed document chunks from Haystack
-        document_chunks = await self.haystack_client.query_documents("business plan content")
-
-        # 2. Evaluate each dimension with OpenAI
-        dimensions = ["team", "product", "market", "business", "finance"]
-        results = {}
-
-        for dimension in dimensions:
-            results[dimension] = await self._evaluate_dimension(dimension, document_chunks)
-
-        return results
-
-    async def _evaluate_dimension(self, dimension: str, chunks: List[str]):
-        prompt = self._get_dimension_prompt(dimension, chunks)
-        response = await self.openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return self._parse_evaluation_response(response)
+**Expected Response:**
+```json
+{
+  "dimensions": [
+    {
+      "dimension": "团队能力",
+      "score": 25,
+      "max_score": 30,
+      "comments": "团队经验丰富，背景优秀",
+      "sub_dimensions": [
+        {
+          "sub_dimension": "核心团队背景",
+          "score": 8,
+          "max_score": 10,
+          "comments": "核心成员背景优秀"
+        }
+      ]
+    }
+  ]
+}
 ```
 
-### **Option 2: Haystack Agents (More Complex)**
-```python
-# Could use Haystack's Agent framework for multi-step reasoning
-from haystack.agents import Agent
-from haystack.agents.conversational import ConversationalAgent
+### 2.2 Update Project Scores
+```http
+PUT /api/v1/projects/{project_id}/scores
+```
+**Status:** ❌ Missing
+**Used by:** Score editing interface
+**Frontend calls:** `scoreApi.updateScores(projectId, scores)`
 
-class BusinessPlanAgent:
-    def __init__(self):
-        # Create specialized agents for each evaluation dimension
-        self.team_agent = self._create_team_evaluation_agent()
-        self.product_agent = self._create_product_evaluation_agent()
-        # ... etc
+**Request Body:**
+```json
+{
+  "dimensions": [
+    {
+      "dimension": "团队能力",
+      "score": 26,
+      "max_score": 30,
+      "comments": "Updated comments",
+      "sub_dimensions": [...]
+    }
+  ]
+}
 ```
 
-## **Recommendation: Start Simple**
+### 2.3 Get Missing Information
+```http
+GET /api/v1/projects/{project_id}/missing-info
+```
+**Status:** ❌ Missing
+**Used by:** Project detail pages
+**Frontend calls:** `scoreApi.getMissingInfo(projectId)`
+**Note:** Frontend currently calls `/missing-information` but mock uses `/missing-info`
 
-For this business plan evaluation use case, I'd recommend **Option 1 (Direct OpenAI Integration)** because:
+**Expected Response:**
+```json
+{
+  "items": [
+    {
+      "dimension": "财务情况",
+      "information_type": "财务报表",
+      "description": "缺少2023年财务报表",
+      "status": "pending|provided"
+    }
+  ]
+}
+```
 
-1. **Clear Evaluation Criteria** - The 5 dimensions are well-defined with specific scoring rubrics
-2. **Deterministic Output** - Need consistent, structured scoring rather than conversational responses
-3. **Easier Implementation** - Simpler to implement, test, and maintain
-4. **Cost Predictability** - Better control over API costs
-5. **Debugging** - Easier to trace issues in evaluation logic
+---
 
-The Haystack pipeline would continue its current role of document processing and retrieval, while OpenAI would handle the actual intelligence and evaluation logic. This creates a clean separation of concerns:
+## 3. **Report Management Endpoints** (Medium Priority)
 
-- **Haystack**: Document processing, chunking, storage, retrieval
-- **OpenAI**: Business intelligence, evaluation, scoring, reasoning
+### 3.1 Get Report Information
+```http
+GET /api/v1/projects/{project_id}/reports
+```
+**Status:** ❌ Missing
+**Used by:** Report pages
+**Frontend calls:** `reportApi.getReport(projectId)`
+
+### 3.2 Download Report
+```http
+GET /api/v1/projects/{project_id}/reports/download
+```
+**Status:** ❌ Missing
+**Used by:** Report download functionality
+**Frontend calls:** `reportApi.downloadReport(projectId)`
+
+**Expected:** Binary PDF response with proper headers
+
+---
+
+## 4. **Authentication Endpoints** (Low Priority - Future)
+
+### 4.1 User Login
+```http
+POST /api/v1/auth/login
+```
+**Status:** ❌ Missing (commented out)
+**Frontend calls:** `authApi.login(username, password)`
+
+---
+
+## 5. **WebSocket Support** (Medium Priority)
+
+### 5.1 Real-time Status Updates
+```
+WS /ws/projects/{project_id}/status
+```
+**Status:** ❌ Missing
+**Used by:** Real-time processing status updates
+
+---
+
+## Implementation Priority
+
+### **Phase 1 - Critical (Required for basic functionality)**
+1. ✅ **Project CRUD endpoints** (1.1 - 1.4)
+2. ✅ **Scoring endpoints** (2.1 - 2.3)
+
+### **Phase 2 - Important (Enhanced functionality)**
+3. **Report endpoints** (3.1 - 3.2)
+4. **WebSocket support** for real-time updates
+
+### **Phase 3 - Future (Authentication & Security)**
+5. **Authentication system**
+6. **User management**
+7. **Role-based access control**
+
+---
+
+## Database Requirements
+
+These endpoints will require the following database tables (some may already exist):
+
+### **Required Tables:**
+- `projects` - Project information
+- `scores` - Evaluation scores and comments
+- `missing_information` - Tracking missing data
+- `reports` - Generated report metadata
+- `users` - User authentication (future)
+
+### **Sample Project Table Schema:**
+```sql
+CREATE TABLE projects (
+    id UUID PRIMARY KEY,
+    enterprise_name VARCHAR(255) NOT NULL,
+    project_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    status VARCHAR(50) DEFAULT 'pending_review',
+    total_score INTEGER,
+    review_result VARCHAR(50),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+---
+
+## Quick Start Implementation
+
+**To get the frontend working immediately:**
+
+1. **Create `backend/app/api/v1/projects.py`** with the endpoints from Phase 1
+2. **Register the router** in `main.py`
+3. **Implement basic database operations** using the existing Supabase client
+4. **Add mock data fallbacks** for development
+
+**The mock server already has all these endpoints working** - you can use it as a reference for the expected request/response formats.
+
+---
+
+## Notes
+
+- **Mock server is complete** - Use `frontend/mock/server.js` as the API contract reference
+- **Database client exists** - Supabase integration is already set up
+- **File storage works** - Business plan upload functionality is implemented
+- **Basic evaluation framework exists** - Need to connect scoring logic to endpoints
+
+The main gap is implementing the **project management and scoring APIs** that the frontend expects.
