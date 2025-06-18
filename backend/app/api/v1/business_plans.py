@@ -1,6 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from typing import List
 import uuid
+from datetime import datetime
 from ...models.business_plan import (
     BusinessPlanCreate,
     BusinessPlanInDB,
@@ -13,76 +14,233 @@ from ...core.database import db
 
 router = APIRouter()
 
-@router.post("/projects/{project_id}/business-plans", response_model=BusinessPlanInDB)
-async def upload_business_plan(project_id: str, file: UploadFile = File(...)):
-    """
-    上传商业计划书
-    """
-    # 验证文件类型
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="只支持PDF文件")
 
-    # 保存文件
-    file_path, filename = await storage_service.save_business_plan(file, project_id)
-    file_size = storage_service.get_file_size(file_path)
-
-    # 创建BP记录
-    bp_id = str(uuid.uuid4())
-    bp_data = BusinessPlanCreate(
-        project_id=project_id, file_name=filename, file_size=file_size
-    )
-
-    # 保存到数据库
+async def process_business_plan_async(bp_id: str, file_path: str, project_id: str):
+    """Background task to process the business plan - simplified for manual review"""
     supabase = db.get_client()
-    result = (
-        supabase.table("business_plans")
-        .insert({"id": bp_id, **bp_data.model_dump()})
-        .execute()
-    )
 
-    if not result.data:
-        # 如果保存失败,删除已上传的文件
-        storage_service.delete_file(file_path)
-        raise HTTPException(status_code=500, detail="保存BP记录失败")
-
-    # 异步处理文档
     try:
-        # 提取文本并评估
-        document_text = await document_processor.extract_text_from_pdf(file_path)
-        evaluation_result = await deepseek_client.evaluate_business_plan(document_text)
+        print(f"🔄 Starting simplified processing for BP {bp_id}")
 
-        # 更新状态为已完成
-        supabase.table("business_plans").update(
-            {"status": BusinessPlanStatus.COMPLETED}
-        ).eq("id", bp_id).execute()
+        # Update status to processing
+        supabase.table("business_plans").update({
+            "status": BusinessPlanStatus.PROCESSING.value,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", bp_id).execute()
+
+        # FIXED: Just verify file exists, skip document processing
+        if not storage_service.file_exists(file_path):
+            raise FileNotFoundError(f"Business plan file not found: {file_path}")
+
+        # FIXED: Skip document processing and AI evaluation
+        # Just mark as completed and ready for manual review
+        print(f"📄 File verified and ready for manual review: {file_path}")
+
+        # Update business plan status to completed
+        supabase.table("business_plans").update({
+            "status": BusinessPlanStatus.COMPLETED.value,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", bp_id).execute()
+
+        # FIXED: Set project to pending_review for manual evaluation
+        supabase.table("projects").update({
+            "status": "pending_review",
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", project_id).execute()
+
+        print(f"✅ Business plan upload completed for {bp_id} - ready for manual review")
 
     except Exception as e:
-        # 更新状态为失败
-        supabase.table("business_plans").update(
-            {"status": BusinessPlanStatus.FAILED, "error_message": str(e)}
-        ).eq("id", bp_id).execute()
-        raise HTTPException(status_code=500, detail=f"处理BP文档失败: {str(e)}")
+        print(f"❌ Business plan processing failed for {bp_id}: {e}")
 
-    return BusinessPlanInDB(id=bp_id, **bp_data.model_dump())
+        # Update status to failed
+        supabase.table("business_plans").update({
+            "status": BusinessPlanStatus.FAILED.value,
+            "error_message": str(e),
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", bp_id).execute()
 
-@router.get(
-    "/projects/{project_id}/business-plans/status", response_model=BusinessPlanInDB
-)
-async def get_business_plan_status(project_id: str):
-    """
-    获取BP处理状态
-    """
+        # Keep project in pending_review state even if file processing fails
+        supabase.table("projects").update({
+            "status": "pending_review",
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", project_id).execute()
+
+
+# REMOVED: Default evaluation creation - projects will be manually reviewed
+
+
+@router.post("/projects/{project_id}/business-plans", response_model=BusinessPlanInDB)
+async def upload_business_plan(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
+    """上传商业计划书"""
     supabase = db.get_client()
-    result = (
-        supabase.table("business_plans")
-        .select("*")
-        .eq("project_id", project_id)
-        .order("upload_time", desc=True)
-        .limit(1)
-        .execute()
-    )
 
-    if not result.data:
-        raise HTTPException(status_code=404, detail="未找到BP记录")
+    # FIXED: Add comprehensive input validation
+    try:
+        # Validate project exists
+        project_result = supabase.table("projects").select("id").eq("id", project_id).execute()
+        if not project_result.data:
+            raise HTTPException(status_code=404, detail="Project not found")
 
-    return BusinessPlanInDB(**result.data[0])
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file provided")
+
+        if not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="只支持PDF文件")
+
+        # Check file size (before reading content)
+        file_size = 0
+        if hasattr(file, 'size') and file.size:
+            file_size = file.size
+        else:
+            # Read content to get size
+            content = await file.read()
+            file_size = len(content)
+            # Reset file position
+            await file.seek(0)
+
+        if file_size > 20 * 1024 * 1024:  # 20MB
+            raise HTTPException(status_code=400, detail="文件大小不能超过20MB")
+
+        if file_size == 0:
+            raise HTTPException(status_code=400, detail="文件不能为空")
+
+        print(f"📤 Uploading BP for project {project_id}: {file.filename} ({file_size} bytes)")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"文件验证失败: {str(e)}")
+
+    # Save file
+    try:
+        file_path, filename = await storage_service.save_business_plan(file, project_id)
+        actual_file_size = storage_service.get_file_size(file_path)
+
+    except Exception as e:
+        print(f"❌ File save failed: {e}")
+        raise HTTPException(status_code=500, detail=f"文件保存失败: {str(e)}")
+
+    # Create BP record in database
+    try:
+        bp_id = str(uuid.uuid4())
+        bp_data = {
+            "id": bp_id,
+            "project_id": project_id,
+            "file_name": filename,
+            "file_size": actual_file_size,
+            "status": BusinessPlanStatus.PROCESSING.value,
+            "upload_time": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+
+        result = supabase.table("business_plans").insert(bp_data).execute()
+
+        if not result.data:
+            # Clean up uploaded file
+            storage_service.delete_file(file_path)
+            raise HTTPException(status_code=500, detail="保存BP记录失败")
+
+        bp_record = BusinessPlanInDB(**result.data[0])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Clean up uploaded file
+        storage_service.delete_file(file_path)
+        raise HTTPException(status_code=500, detail=f"数据库操作失败: {str(e)}")
+
+    # FIXED: Start background processing
+    try:
+        background_tasks.add_task(
+            process_business_plan_async,
+            bp_id,
+            file_path,
+            project_id
+        )
+        print(f"⚡ Background processing started for BP {bp_id}")
+
+    except Exception as e:
+        print(f"⚠️ Failed to start background processing: {e}")
+        # Don't fail the upload, just log the warning
+
+    return bp_record
+
+
+@router.get("/projects/{project_id}/business-plans/status", response_model=BusinessPlanInDB)
+async def get_business_plan_status(project_id: str):
+    """获取BP处理状态"""
+    supabase = db.get_client()
+
+    try:
+        # Validate UUID format
+        try:
+            uuid.UUID(project_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+        # Get the latest business plan for this project
+        result = (
+            supabase.table("business_plans")
+            .select("*")
+            .eq("project_id", project_id)
+            .order("upload_time", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="未找到BP记录")
+
+        return BusinessPlanInDB(**result.data[0])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取BP状态失败: {str(e)}")
+
+
+@router.get("/projects/{project_id}/business-plans/download")
+async def download_business_plan(project_id: str):
+    """下载BP文档"""
+    from fastapi.responses import FileResponse
+
+    supabase = db.get_client()
+
+    try:
+        # Get the latest business plan for this project
+        result = (
+            supabase.table("business_plans")
+            .select("*")
+            .eq("project_id", project_id)
+            .order("upload_time", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="未找到BP文档")
+
+        bp_record = result.data[0]
+
+        # Construct file path (this assumes a standard naming pattern)
+        file_path = storage_service.bp_dir / bp_record['file_name']
+
+        if not storage_service.file_exists(str(file_path)):
+            raise HTTPException(status_code=404, detail="BP文档文件不存在")
+
+        return FileResponse(
+            path=str(file_path),
+            filename=f"{bp_record['file_name']}",
+            media_type='application/pdf'
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"下载BP文档失败: {str(e)}")

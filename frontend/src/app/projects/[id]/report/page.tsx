@@ -39,7 +39,7 @@ export default function ProjectReportPage() {
   const handleDownloadReport = async () => {
     try {
       const response = await reportApi.downloadReport(projectId);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(new Blob([response]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `评审报告_${project.project_name}.pdf`);
@@ -141,4 +141,4 @@ export default function ProjectReportPage() {
       </div>
     </Layout>
   );
-} 
+}

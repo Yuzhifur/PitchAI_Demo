@@ -48,7 +48,7 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (project?.status === 'processing') {
       const ws = new WebSocket(`ws://localhost:8000/ws/projects/${projectId}/status`);
-      
+
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         setProcessingStatus(data);
@@ -76,12 +76,33 @@ export default function ProjectDetailPage() {
   };
 
   const handleScoreChange = (dimension: string, field: 'score' | 'comments', value: string | number) => {
-    setEditedScores(prev => prev.map(score => 
-      score.dimension === dimension 
+    setEditedScores(prev => prev.map(score =>
+      score.dimension === dimension
         ? { ...score, [field]: value }
         : score
     ));
   };
+
+  const handleViewBP = async () => {
+  try {
+    // First check if BP exists
+    const statusResponse = await businessPlanApi.getStatus(projectId);
+
+    if (statusResponse.data.status === 'completed') {
+      // Open BP in new tab
+      const downloadUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/projects/${projectId}/business-plans/download`;
+      window.open(downloadUrl, '_blank');
+    } else {
+      setError('BP文档尚未上传或处理中');
+    }
+  } catch (err: any) {
+    if (err.response?.status === 404) {
+      setError('未找到BP文档，请先上传BP文档');
+    } else {
+      setError('无法查看BP文档，请稍后重试');
+    }
+  }
+};
 
   const handleSave = async () => {
     try {
@@ -167,7 +188,12 @@ export default function ProjectDetailPage() {
                   <div className="text-gray-500 mb-2"><i className="fa-solid fa-building mr-1"></i> {project.enterprise_name}</div>
                   <div className="text-gray-400 text-sm mb-4">提交时间：{project.created_at?.slice(0, 10)}</div>
                   <div className="mb-4">
-                    <a href="#" className="inline-flex items-center text-purple-500 hover:underline text-sm"><i className="fa-solid fa-file-pdf mr-1"></i> 查看BP文档</a>
+                    <button
+                      onClick={handleViewBP}
+                      className="inline-flex items-center text-purple-500 hover:underline text-sm"
+                    >
+                      <i className="fa-solid fa-file-pdf mr-1"></i> 查看BP文档
+                    </button>
                   </div>
                   <div className="bg-gray-100 rounded-xl p-4 flex items-center">
                     <i className="fa-solid fa-user-group text-purple-400 text-xl mr-3"></i>
@@ -236,7 +262,7 @@ export default function ProjectDetailPage() {
             <div className="flex justify-end space-x-4">
               {isEditing ? (
                 <>
-                  <button 
+                  <button
                     onClick={() => {
                       setIsEditing(false);
                       setEditedScores(scores);
@@ -245,7 +271,7 @@ export default function ProjectDetailPage() {
                   >
                     <i className="fa-solid fa-xmark mr-2"></i> 取消
                   </button>
-                  <button 
+                  <button
                     onClick={handleSave}
                     className="px-8 py-3 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-400 text-white font-semibold text-lg shadow hover:from-purple-600 hover:to-pink-500 transition-all duration-200 hover:shadow-lg flex items-center"
                   >
@@ -254,13 +280,13 @@ export default function ProjectDetailPage() {
                 </>
               ) : (
                 <>
-                  <button 
+                  <button
                     onClick={() => setIsEditing(true)}
                     className="px-6 py-3 rounded-xl border border-gray-300 text-gray-600 font-semibold text-lg hover:bg-gray-50 transition flex items-center"
                   >
                     <i className="fa-solid fa-pen mr-2"></i> 修改评分
                   </button>
-                  <button 
+                  <button
                     onClick={() => router.push(`/projects/${projectId}/report`)}
                     className="px-8 py-3 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-400 text-white font-semibold text-lg shadow hover:from-purple-600 hover:to-pink-500 transition flex items-center"
                   >
@@ -328,4 +354,4 @@ export default function ProjectDetailPage() {
       </div>
     </Layout>
   );
-} 
+}
