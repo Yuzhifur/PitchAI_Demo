@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { projectApi, scoreApi, reportApi } from "@/lib/api";
 import type { Score, MissingInfo } from "@/lib/types";
 import Layout from '@/components/Layout';
+import { businessPlanApi } from "@/lib/api";
 
 export default function ProjectReportPage() {
   const params = useParams();
@@ -15,6 +16,24 @@ export default function ProjectReportPage() {
   const [missingInfo, setMissingInfo] = useState<MissingInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [bpInfo, setBpInfo] = useState<any>(null);
+  const [downloadingBP, setDownloadingBP] = useState(false);
+
+  const handleDownloadBP = async () => {
+  if (!bpInfo?.file_exists) {
+    setError("商业计划书文件不存在");
+    return;
+  }
+
+  setDownloadingBP(true);
+    try {
+      await businessPlanApi.downloadAndSave(projectId, bpInfo.file_name);
+    } catch (err: any) {
+      setError(err.response?.data?.message || '下载文件失败');
+    } finally {
+      setDownloadingBP(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -27,6 +46,14 @@ export default function ProjectReportPage() {
         setProject(projectRes.data);
         setScores(scoresRes.data.dimensions);
         setMissingInfo(missingInfoRes.data.items);
+
+        // Try to get BP info
+        try {
+          const bpInfoRes = await businessPlanApi.getInfo(projectId);
+          setBpInfo(bpInfoRes.data);
+        } catch (bpError) {
+          console.log("No BP found for project:", projectId);
+        }
       } catch (err: any) {
         setError(err.response?.data?.message || "获取报告失败");
       } finally {
@@ -102,7 +129,22 @@ export default function ProjectReportPage() {
                 <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs"><i className="fa-solid fa-thumbs-up mr-1"></i> {project.review_result || '评审通过'}</span>
               </div>
               <div className="mb-2">
-                <a href="#" className="text-purple-500 hover:underline text-sm flex items-center"><i className="fa-solid fa-file-pdf mr-1"></i> 查看BP文档</a>
+                <div className="mb-2">
+                  {bpInfo?.file_exists ? (
+                    <button
+                      onClick={handleDownloadBP}
+                      disabled={downloadingBP}
+                      className="text-purple-500 hover:underline text-sm flex items-center disabled:opacity-50"
+                    >
+                      <i className={`fa-solid ${downloadingBP ? 'fa-spinner fa-spin' : 'fa-file-pdf'} mr-1`}></i>
+                      {downloadingBP ? '下载中...' : '查看BP文档'}
+                    </button>
+                  ) : (
+                    <span className="text-gray-400 text-sm flex items-center">
+                      <i className="fa-solid fa-file-pdf mr-1"></i> 暂无BP文档
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             {/* 评分维度卡片区 */}

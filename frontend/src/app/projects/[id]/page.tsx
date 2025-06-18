@@ -23,6 +23,8 @@ export default function ProjectDetailPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [bpInfo, setBpInfo] = useState<any>(null);
+  const [downloadingBP, setDownloadingBP] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -36,6 +38,15 @@ export default function ProjectDetailPage() {
         setScores(scoresRes.data.dimensions);
         setEditedScores(scoresRes.data.dimensions);
         setMissingInfo(missingInfoRes.data.items);
+
+        // Try to get BP info - don't fail if it doesn't exist
+        try {
+          const bpInfoRes = await businessPlanApi.getInfo(projectId);
+          setBpInfo(bpInfoRes.data);
+        } catch (bpError) {
+          // BP not found is OK, just means no file uploaded yet
+          console.log("No BP found for project:", projectId);
+        }
       } catch (err: any) {
         setError(err.response?.data?.message || "获取项目详情失败");
       } finally {
@@ -60,10 +71,27 @@ export default function ProjectDetailPage() {
     }
   }, [project?.status, projectId]);
 
+  // Add this function to handle BP download
+  const handleDownloadBP = async () => {
+    if (!bpInfo?.file_exists) {
+      setError("商业计划书文件不存在");
+      return;
+    }
+
+    setDownloadingBP(true);
+    try {
+      await businessPlanApi.downloadAndSave(projectId, bpInfo.file_name);
+    } catch (err: any) {
+      setError(err.response?.data?.message || '下载文件失败');
+    } finally {
+      setDownloadingBP(false);
+    }
+  };
+
   const handleDownloadReport = async () => {
     try {
       const response = await reportApi.downloadReport(projectId);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(new Blob([response]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `评审报告_${project.project_name}.pdf`);
@@ -188,12 +216,20 @@ export default function ProjectDetailPage() {
                   <div className="text-gray-500 mb-2"><i className="fa-solid fa-building mr-1"></i> {project.enterprise_name}</div>
                   <div className="text-gray-400 text-sm mb-4">提交时间：{project.created_at?.slice(0, 10)}</div>
                   <div className="mb-4">
-                    <button
-                      onClick={handleViewBP}
-                      className="inline-flex items-center text-purple-500 hover:underline text-sm"
-                    >
-                      <i className="fa-solid fa-file-pdf mr-1"></i> 查看BP文档
-                    </button>
+                    {bpInfo?.file_exists ? (
+                      <button
+                        onClick={handleDownloadBP}
+                        disabled={downloadingBP}
+                        className="inline-flex items-center text-purple-500 hover:underline text-sm disabled:opacity-50"
+                      >
+                        <i className={`fa-solid ${downloadingBP ? 'fa-spinner fa-spin' : 'fa-file-pdf'} mr-1`}></i>
+                        {downloadingBP ? '下载中...' : '查看BP文档'}
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center text-gray-400 text-sm">
+                        <i className="fa-solid fa-file-pdf mr-1"></i> 暂无BP文档
+                      </span>
+                    )}
                   </div>
                   <div className="bg-gray-100 rounded-xl p-4 flex items-center">
                     <i className="fa-solid fa-user-group text-purple-400 text-xl mr-3"></i>
@@ -207,9 +243,33 @@ export default function ProjectDetailPage() {
               {/* 右侧BP文档卡片 */}
               <div className="bg-white rounded-2xl shadow p-8 flex flex-col items-center justify-center">
                 <div className="w-full h-64 bg-gray-200 rounded-xl flex items-center justify-center text-gray-400 text-2xl">
-                  <i className="fa-solid fa-file-pdf mr-2"></i> BP文档预览
+                  <div className="text-center">
+                    <i className="fa-solid fa-file-pdf mr-2"></i>
+                    <div className="text-sm mt-2">
+                      {bpInfo?.file_exists ? `${bpInfo.file_name}` : 'BP文档预览'}
+                    </div>
+                    {bpInfo?.file_size && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {Math.round(bpInfo.file_size / 1024 / 1024 * 100) / 100} MB
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <a href="#" className="mt-4 text-purple-500 hover:underline text-sm flex items-center"><i className="fa-solid fa-download mr-1"></i> 下载BP</a>
+                {/* Download button goes here */}
+                {bpInfo?.file_exists ? (
+                  <button
+                    onClick={handleDownloadBP}
+                    disabled={downloadingBP}
+                    className="mt-4 text-purple-500 hover:underline text-sm flex items-center disabled:opacity-50"
+                  >
+                    <i className={`fa-solid ${downloadingBP ? 'fa-spinner fa-spin' : 'fa-download'} mr-1`}></i>
+                    {downloadingBP ? '下载中...' : '下载BP'}
+                  </button>
+                ) : (
+                  <span className="mt-4 text-gray-400 text-sm flex items-center">
+                    <i className="fa-solid fa-download mr-1"></i> 暂无文件
+                  </span>
+                )}
               </div>
             </div>
             {/* 评分维度卡片区 */}
