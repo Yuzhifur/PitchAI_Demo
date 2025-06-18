@@ -46,8 +46,25 @@ api.interceptors.response.use(
 );
 
 // Helper function to handle API responses
-const handleResponse = <T>(response: AxiosResponse<ApiResponse<T>>): ApiResponse<T> => {
-  return response.data;
+const handleResponse = <T>(response: AxiosResponse<any>): ApiResponse<T> => {
+  console.log('🔍 Raw API Response:', {
+    status: response.status,
+    data: response.data,
+    dataType: typeof response.data,
+    dataKeys: Object.keys(response.data || {})
+  });
+
+  // Check if response already has the expected structure
+  if (response.data && typeof response.data === 'object' && 'code' in response.data) {
+    return response.data;
+  }
+
+  // If not, wrap the response in the expected format
+  return {
+    code: response.status,
+    message: 'success',
+    data: response.data
+  };
 };
 
 // Project API
@@ -139,6 +156,42 @@ export const businessPlanApi = {
   getStatus: async (projectId: string): Promise<ApiResponse<any>> => {
     const response = await api.get<ApiResponse<any>>(`/projects/${projectId}/business-plans/status`);
     return handleResponse(response);
+  },
+    // Get business plan information
+  getInfo: async (projectId: string): Promise<ApiResponse<any>> => {
+    const response = await api.get<ApiResponse<any>>(`/projects/${projectId}/business-plans/info`);
+    return handleResponse(response);
+  },
+
+  download: async (projectId: string): Promise<Blob> => {
+    const response = await api.get(`/projects/${projectId}/business-plans/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  // Helper method to trigger download with proper filename
+  downloadAndSave: async (projectId: string, fallbackFilename: string = 'business_plan.pdf'): Promise<void> => {
+    try {
+      // Get BP info first to get the original filename
+      const infoResponse = await businessPlanApi.getInfo(projectId);
+      const fileName = infoResponse.data.file_name || fallbackFilename;
+
+      // Download the file
+      const blob = await businessPlanApi.download(projectId);
+
+      // Create download link and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      throw error;
+    }
   },
 };
 

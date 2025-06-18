@@ -19,16 +19,32 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# 配置CORS
+# 配置CORS - MOVED TO TOP AND IMPROVED
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 在生产环境中应该设置具体的源
+    allow_origins=[
+        "http://localhost:3000",  # Next.js dev server
+        "http://127.0.0.1:3000",  # Alternative localhost
+        "http://localhost:3001",  # Mock server
+        "http://127.0.0.1:3001",  # Alternative localhost
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-# 健康检查 - FIXED: Move this BEFORE router registration
+# Alternative: Allow all origins for development (less secure but simpler)
+# Uncomment this and comment out the above if you still have issues:
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     allow_credentials=False,  # Must be False when allow_origins=["*"]
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
+
+# 健康检查
 @app.get("/ping", tags=["Health"])
 def health_check():
     return {"status": "ok", "version": "1.0.0"}
@@ -43,11 +59,12 @@ def read_root():
         "health": "/ping"
     }
 
-# 注册路由 - FIXED: Add /api/v1 prefix to health check as well
+# API健康检查
 @app.get(f"{settings.API_PREFIX}/ping", tags=["Health"])
 def health_check_api():
     return {"status": "ok", "version": "1.0.0", "api_prefix": settings.API_PREFIX}
 
+# 注册路由
 app.include_router(
     projects.router, prefix=settings.API_PREFIX, tags=["项目管理"]
 )
