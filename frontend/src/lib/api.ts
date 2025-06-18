@@ -1,13 +1,29 @@
-import axios from 'axios';
-import type { Score } from './types';
+// File: frontend/src/lib/api.ts
 
+import axios, { AxiosResponse } from 'axios';
+import type {
+  Project,
+  ProjectCreateData,
+  ProjectListParams,
+  ProjectListResponse,
+  ProjectStatistics,
+  ProjectScores,
+  MissingInfoResponse,
+  ScoreUpdateData,
+  ScoreSummary,
+  ApiResponse
+} from './types';
+
+// Create axios instance with base configuration
 const api = axios.create({
-  // baseURL: '/api/v1',
-  baseURL: 'http://localhost:3001/api/v1',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
   timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-// 请求拦截器：添加 token
+// Request interceptor to add auth token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -16,62 +32,146 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 响应拦截器：处理错误
+// Response interceptor for error handling
 api.interceptors.response.use(
-  (response) => response.data,
+  (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // 处理未认证情况
       localStorage.removeItem('token');
+      // Redirect to login page
       window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
 
-// 认证相关 API
-export const authApi = {
-  login: (username: string, password: string) =>
-    api.post('/auth/login', { username, password }),
+// Helper function to handle API responses
+const handleResponse = <T>(response: AxiosResponse<ApiResponse<T>>): ApiResponse<T> => {
+  return response.data;
 };
 
-// 项目相关 API
+// Project API
 export const projectApi = {
-  create: (data: { enterprise_name: string; project_name: string; description?: string }) =>
-    api.post('/projects', data),
-  list: (params: { page?: number; size?: number; status?: string; search?: string }) =>
-    api.get('/projects', { params }),
-  getDetail: (projectId: string) => api.get(`/projects/${projectId}`),
-  // 获取项目统计信息
-  getStatistics: () => api.get('/projects/statistics'),
+  // Get project statistics for dashboard
+  getStatistics: async (): Promise<ApiResponse<ProjectStatistics>> => {
+    const response = await api.get<ApiResponse<ProjectStatistics>>('/projects/statistics');
+    return handleResponse(response);
+  },
+
+  // List projects with pagination and filtering
+  list: async (params: ProjectListParams = {}): Promise<ApiResponse<ProjectListResponse>> => {
+    const response = await api.get<ApiResponse<ProjectListResponse>>('/projects', { params });
+    return handleResponse(response);
+  },
+
+  // Create a new project
+  create: async (data: ProjectCreateData): Promise<ApiResponse<Project>> => {
+    const response = await api.post<ApiResponse<Project>>('/projects', data);
+    return handleResponse(response);
+  },
+
+  // Get project details
+  getDetail: async (projectId: string): Promise<ApiResponse<Project>> => {
+    const response = await api.get<ApiResponse<Project>>(`/projects/${projectId}`);
+    return handleResponse(response);
+  },
+
+  // Update project
+  update: async (projectId: string, data: Partial<ProjectCreateData>): Promise<ApiResponse<Project>> => {
+    const response = await api.put<ApiResponse<Project>>(`/projects/${projectId}`, data);
+    return handleResponse(response);
+  },
+
+  // Delete project
+  delete: async (projectId: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete<ApiResponse<{ message: string }>>(`/projects/${projectId}`);
+    return handleResponse(response);
+  },
 };
 
-// BP文档相关 API
+// Score API
+export const scoreApi = {
+  // Get project scores
+  getScores: async (projectId: string): Promise<ApiResponse<ProjectScores>> => {
+    const response = await api.get<ApiResponse<ProjectScores>>(`/projects/${projectId}/scores`);
+    return handleResponse(response);
+  },
+
+  // Update project scores
+  updateScores: async (projectId: string, data: ScoreUpdateData): Promise<ApiResponse<ProjectScores>> => {
+    const response = await api.put<ApiResponse<ProjectScores>>(`/projects/${projectId}/scores`, data);
+    return handleResponse(response);
+  },
+
+  // Get missing information
+  getMissingInfo: async (projectId: string): Promise<ApiResponse<MissingInfoResponse>> => {
+    const response = await api.get<ApiResponse<MissingInfoResponse>>(`/projects/${projectId}/missing-information`);
+    return handleResponse(response);
+  },
+
+  // Get score summary
+  getScoreSummary: async (projectId: string): Promise<ApiResponse<ScoreSummary>> => {
+    const response = await api.get<ApiResponse<ScoreSummary>>(`/projects/${projectId}/scores/summary`);
+    return handleResponse(response);
+  },
+};
+
+// Business Plan API
 export const businessPlanApi = {
-  upload: (projectId: string, file: File) => {
+  // Upload business plan
+  upload: async (projectId: string, file: File): Promise<ApiResponse<any>> => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post(`/projects/${projectId}/business-plans`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+
+    const response = await api.post<ApiResponse<any>>(
+      `/projects/${projectId}/business-plans`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return handleResponse(response);
   },
-  getStatus: (projectId: string) =>
-    api.get(`/projects/${projectId}/business-plans/status`),
+
+  // Get upload status
+  getStatus: async (projectId: string): Promise<ApiResponse<any>> => {
+    const response = await api.get<ApiResponse<any>>(`/projects/${projectId}/business-plans/status`);
+    return handleResponse(response);
+  },
 };
 
-// 评分相关 API
-export const scoreApi = {
-  getScores: (projectId: string) => api.get(`/projects/${projectId}/scores`),
-  getMissingInfo: (projectId: string) =>
-    api.get(`/projects/${projectId}/missing-info`),
-  updateScores: (projectId: string, scores: Score[]) => api.put(`/projects/${projectId}/scores`, { dimensions: scores }),
-};
-
-// 报告相关 API
+// Report API
 export const reportApi = {
-  getReport: (projectId: string) => api.get(`/projects/${projectId}/reports`),
-  downloadReport: (projectId: string) =>
-    api.get(`/projects/${projectId}/reports/download`, { responseType: 'blob' }),
+  // Get report information
+  getReport: async (projectId: string): Promise<ApiResponse<any>> => {
+    const response = await api.get<ApiResponse<any>>(`/projects/${projectId}/reports`);
+    return handleResponse(response);
+  },
+
+  // Download report
+  downloadReport: async (projectId: string): Promise<Blob> => {
+    const response = await api.get(`/projects/${projectId}/reports/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
 
+// Auth API
+export const authApi = {
+  // User login
+  login: async (username: string, password: string): Promise<ApiResponse<any>> => {
+    const response = await api.post<ApiResponse<any>>('/auth/login', { username, password });
+    return handleResponse(response);
+  },
+
+  // Logout
+  logout: async (): Promise<void> => {
+    localStorage.removeItem('token');
+  },
+};
+
+// Export default api instance for custom requests
 export default api;
