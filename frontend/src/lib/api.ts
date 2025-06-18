@@ -46,8 +46,27 @@ api.interceptors.response.use(
 );
 
 // Helper function to handle API responses
-const handleResponse = <T>(response: AxiosResponse<ApiResponse<T>>): ApiResponse<T> => {
-  return response.data;
+const handleResponse = <T>(response: AxiosResponse<any>): ApiResponse<T> => {
+  console.log('🔍 Raw API Response:', {
+    status: response.status,
+    data: response.data,
+    dataType: typeof response.data,
+    dataKeys: Object.keys(response.data || {})
+  });
+
+  // Check if response already has the expected structure
+  if (response.data && typeof response.data === 'object' && 'code' in response.data) {
+    console.log('✅ Response has expected structure');
+    return response.data;
+  }
+
+  // If not, wrap the response in the expected format
+  console.log('⚠️ Response missing expected structure, wrapping...');
+  return {
+    code: response.status,
+    message: 'success',
+    data: response.data
+  };
 };
 
 // Project API
