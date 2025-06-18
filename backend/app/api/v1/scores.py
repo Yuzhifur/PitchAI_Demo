@@ -57,6 +57,64 @@ async def get_project_scores(project_id: str):
         if not project_result.data:
             raise HTTPException(status_code=404, detail="Project not found")
 
+        # Get dimension scores
+        scores_result = supabase.table("scores").select("*").eq("project_id", project_id).execute()
+
+        # Get sub-dimension scores for all scores
+        dimensions = []
+        for score_row in scores_result.data:
+            # Get sub-dimensions for this score
+            sub_dims_result = supabase.table("score_details").select("*").eq("score_id", score_row['id']).execute()
+
+            dimension_score = row_to_dimension_score(score_row, sub_dims_result.data)
+            dimensions.append(dimension_score)
+
+        # If no scores exist, return default structure with zero scores
+        if not dimensions:
+            dimensions = []
+            for dim_name, dim_config in STANDARD_DIMENSIONS.items():
+                sub_dimensions = []
+                for sub_name, sub_max in dim_config["sub_dimensions"].items():
+                    sub_dimensions.append(SubDimensionScore(
+                        sub_dimension=sub_name,
+                        score=0,
+                        max_score=sub_max,
+                        comments=""
+                    ))
+
+                dimensions.append(DimensionScore(
+                    dimension=dim_name,
+                    score=0,
+                    max_score=dim_config["max_score"],
+                    comments="",
+                    sub_dimensions=sub_dimensions
+                ))
+
+        return ProjectScores(dimensions=dimensions)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get scores: {str(e)}")
+
+
+@router.put("/projects/{project_id}/scores", response_model=ProjectScores)
+async def update_project_scores(project_id: str, score_update: ScoreUpdate):
+    """Update scores for a specific project"""
+    supabase = db.get_client()
+
+    try:
+        # Validate UUID format
+        try:
+            uuid.UUID(project_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+        # Check if project exists
+        project_result = supabase.table("projects").select("id").eq("id", project_id).execute()
+        if not project_result.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+
         # Begin transaction-like operations
         # First, delete existing scores and sub-scores for this project
         existing_scores = supabase.table("scores").select("id").eq("project_id", project_id).execute()
@@ -300,60 +358,3 @@ async def get_project_score_summary(project_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get score summary: {str(e)}")
-
-@router.put("/projects/{project_id}/scores", response_model=ProjectScores)
-async def update_project_scores(project_id: str, score_update: ScoreUpdate):
-    """Update scores for a specific project"""
-    supabase = db.get_client()
-
-    try:
-        # Validate UUID format
-        try:
-            uuid.UUID(project_id)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid project ID format")
-
-        # Check if project exists
-        project_result = supabase.table("projects").select("id").eq("id", project_id).execute()
-        if not project_result.data:
-            raise HTTPException(status_code=404, detail="Project not found")
-
-        # Get dimension scores
-        scores_result = supabase.table("scores").select("*").eq("project_id", project_id).execute()
-
-        # Get sub-dimension scores for all scores
-        dimensions = []
-        for score_row in scores_result.data:
-            # Get sub-dimensions for this score
-            sub_dims_result = supabase.table("score_details").select("*").eq("score_id", score_row['id']).execute()
-
-            dimension_score = row_to_dimension_score(score_row, sub_dims_result.data)
-            dimensions.append(dimension_score)
-
-        # If no scores exist, return default structure with zero scores
-        if not dimensions:
-            dimensions = []
-            for dim_name, dim_config in STANDARD_DIMENSIONS.items():
-                sub_dimensions = []
-                for sub_name, sub_max in dim_config["sub_dimensions"].items():
-                    sub_dimensions.append(SubDimensionScore(
-                        sub_dimension=sub_name,
-                        score=0,
-                        max_score=sub_max,
-                        comments=""
-                    ))
-
-                dimensions.append(DimensionScore(
-                    dimension=dim_name,
-                    score=0,
-                    max_score=dim_config["max_score"],
-                    comments="",
-                    sub_dimensions=sub_dimensions
-                ))
-
-        return ProjectScores(dimensions=dimensions)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get scores: {str(e)}")

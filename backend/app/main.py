@@ -28,12 +28,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 健康检查
+# 健康检查 - FIXED: Move this BEFORE router registration
 @app.get("/ping", tags=["Health"])
 def health_check():
     return {"status": "ok", "version": "1.0.0"}
 
-# 注册路由
+# 根路径重定向到文档
+@app.get("/", tags=["Root"])
+def read_root():
+    return {
+        "message": "PitchAI API Server",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/ping"
+    }
+
+# 注册路由 - FIXED: Add /api/v1 prefix to health check as well
+@app.get(f"{settings.API_PREFIX}/ping", tags=["Health"])
+def health_check_api():
+    return {"status": "ok", "version": "1.0.0", "api_prefix": settings.API_PREFIX}
+
 app.include_router(
     projects.router, prefix=settings.API_PREFIX, tags=["项目管理"]
 )
@@ -49,16 +63,6 @@ app.include_router(
 app.include_router(
     evaluations.router, prefix=settings.API_PREFIX, tags=["评估"]
 )
-
-# 根路径重定向到文档
-@app.get("/", tags=["Root"])
-def read_root():
-    return {
-        "message": "PitchAI API Server",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "health": "/ping"
-    }
 
 if __name__ == "__main__":
     import uvicorn
