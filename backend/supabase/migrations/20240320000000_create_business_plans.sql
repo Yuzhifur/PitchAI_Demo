@@ -1,7 +1,7 @@
 -- Create business_plans table
 CREATE TABLE IF NOT EXISTS business_plans (
-    id UUID PRIMARY KEY,
-    project_id UUID NOT NULL REFERENCES projects(id),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     file_name TEXT NOT NULL,
     file_size INTEGER NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('processing', 'completed', 'failed')),
@@ -16,38 +16,30 @@ CREATE INDEX IF NOT EXISTS idx_business_plans_project_id ON business_plans(proje
 -- Create index on upload_time
 CREATE INDEX IF NOT EXISTS idx_business_plans_upload_time ON business_plans(upload_time);
 
--- Add RLS policies
+-- Create index on status for filtering
+CREATE INDEX IF NOT EXISTS idx_business_plans_status ON business_plans(status);
+
+-- Add RLS policies (simplified for demo - no user authentication yet)
 ALTER TABLE business_plans ENABLE ROW LEVEL SECURITY;
 
--- Allow authenticated users to view their own business plans
-CREATE POLICY "Users can view their own business plans"
+-- Allow all operations for now (update with proper auth later)
+CREATE POLICY "Allow all operations on business_plans"
     ON business_plans
-    FOR SELECT
-    USING (
-        project_id IN (
-            SELECT id FROM projects
-            WHERE user_id = auth.uid()
-        )
-    );
+    FOR ALL
+    USING (true);
 
--- Allow authenticated users to insert their own business plans
-CREATE POLICY "Users can insert their own business plans"
-    ON business_plans
-    FOR INSERT
-    WITH CHECK (
-        project_id IN (
-            SELECT id FROM projects
-            WHERE user_id = auth.uid()
-        )
-    );
+-- Function to automatically update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_business_plans_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- Allow authenticated users to update their own business plans
-CREATE POLICY "Users can update their own business plans"
-    ON business_plans
-    FOR UPDATE
-    USING (
-        project_id IN (
-            SELECT id FROM projects
-            WHERE user_id = auth.uid()
-        )
-    ); 
+-- Create trigger to automatically update updated_at
+DROP TRIGGER IF EXISTS trigger_update_business_plans_updated_at ON business_plans;
+CREATE TRIGGER trigger_update_business_plans_updated_at
+    BEFORE UPDATE ON business_plans
+    FOR EACH ROW
+    EXECUTE FUNCTION update_business_plans_updated_at();

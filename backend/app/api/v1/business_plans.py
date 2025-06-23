@@ -144,12 +144,66 @@ async def store_evaluation_results(project_id: str, evaluation_result: dict):
 
             supabase.table("missing_information").insert(missing_data).execute()
 
+        # ✅ NEW: Save AI evaluation to history after storing current scores
+        await save_ai_evaluation_to_history(project_id, evaluation_result)
+
         print(f"✅ Successfully stored evaluation results for project {project_id}")
 
     except Exception as e:
         print(f"❌ Failed to store evaluation results: {str(e)}")
         raise
 
+async def save_ai_evaluation_to_history(project_id: str, evaluation_result: dict):
+    """Save AI evaluation results to review history"""
+    supabase = db.get_client()
+
+    try:
+        # Build the dimensions structure for history
+        dimensions = {}
+        evaluation_dimensions = evaluation_result.get("dimensions", {})
+
+        for dimension_name, dimension_data in evaluation_dimensions.items():
+            # Convert sub_dimensions list to the expected format
+            sub_dimensions = []
+            for sub_dim in dimension_data.get("sub_dimensions", []):
+                sub_dimensions.append({
+                    "sub_dimension": sub_dim.get("sub_dimension", ""),
+                    "score": float(sub_dim.get("score", 0)),
+                    "max_score": float(sub_dim.get("max_score", 0)),
+                    "comments": sub_dim.get("comments", "")
+                })
+
+            dimensions[dimension_name] = {
+                "score": float(dimension_data.get("score", 0)),
+                "max_score": float(dimension_data.get("max_score", 0)),
+                "comments": dimension_data.get("comments", ""),
+                "sub_dimensions": sub_dimensions
+            }
+
+        # Calculate total score
+        total_score = evaluation_result.get("total_score", 0)
+
+        # Create history record for AI evaluation
+        history_data = {
+            "id": str(uuid.uuid4()),
+            "project_id": project_id,
+            "total_score": float(total_score),
+            "dimensions": dimensions,
+            "modified_by": "AI系统",
+            "modification_notes": f"DeepSeek AI自动评估 (总分: {total_score}/100)",
+            "created_at": datetime.utcnow().isoformat()
+        }
+
+        result = supabase.table("review_history").insert(history_data).execute()
+
+        if result.data:
+            print(f"✅ Saved AI evaluation to history for project {project_id}")
+        else:
+            print(f"⚠️ Failed to save AI evaluation to history")
+
+    except Exception as e:
+        print(f"⚠️ Failed to save AI evaluation to history: {str(e)}")
+        # Don't fail the main operation if history save fails
 
 @router.post("/projects/{project_id}/business-plans", response_model=BusinessPlanInDB)
 async def upload_business_plan(

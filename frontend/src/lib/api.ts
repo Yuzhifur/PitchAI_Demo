@@ -11,7 +11,8 @@ import type {
   MissingInfoResponse,
   ScoreUpdateData,
   ScoreSummary,
-  ApiResponse
+  ApiResponse,
+  ScoreHistoryResponse
 } from './types';
 
 // Create axios instance with base configuration
@@ -47,12 +48,6 @@ api.interceptors.response.use(
 
 // Helper function to handle API responses
 const handleResponse = <T>(response: AxiosResponse<any>): ApiResponse<T> => {
-  console.log('🔍 Raw API Response:', {
-    status: response.status,
-    data: response.data,
-    dataType: typeof response.data,
-    dataKeys: Object.keys(response.data || {})
-  });
 
   // Check if response already has the expected structure
   if (response.data && typeof response.data === 'object' && 'code' in response.data) {
@@ -99,7 +94,6 @@ export const projectApi = {
     return handleResponse(response);
   },
 
-  // Delete project
   delete: async (projectId: string): Promise<ApiResponse<{ message: string }>> => {
     const response = await api.delete<ApiResponse<{ message: string }>>(`/projects/${projectId}`);
     return handleResponse(response);
@@ -129,6 +123,12 @@ export const scoreApi = {
   // Get score summary
   getScoreSummary: async (projectId: string): Promise<ApiResponse<ScoreSummary>> => {
     const response = await api.get<ApiResponse<ScoreSummary>>(`/projects/${projectId}/scores/summary`);
+    return handleResponse(response);
+  },
+
+  // Get score change history
+  getScoreHistory: async (projectId: string): Promise<ApiResponse<ScoreHistoryResponse>> => {
+    const response = await api.get<ApiResponse<ScoreHistoryResponse>>(`/projects/${projectId}/scores/history`);
     return handleResponse(response);
   },
 };

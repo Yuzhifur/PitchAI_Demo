@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { projectApi, scoreApi, reportApi, businessPlanApi } from "@/lib/api";
 import Layout from '@/components/Layout';
-
-import type { Score, MissingInfo } from "@/lib/types";
+import type { Score, MissingInfo, ScoreHistoryItem } from "@/lib/types";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -21,10 +20,12 @@ export default function ProjectDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedScores, setEditedScores] = useState<Score[]>([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [historyList, setHistoryList] = useState<any[]>([]);
+  const [historyList, setHistoryList] = useState<ScoreHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [bpInfo, setBpInfo] = useState<any>(null);
   const [downloadingBP, setDownloadingBP] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -111,32 +112,43 @@ export default function ProjectDetailPage() {
     ));
   };
 
-  const handleViewBP = async () => {
-  try {
-    // First check if BP exists
-    const statusResponse = await businessPlanApi.getStatus(projectId);
+  const handleScoreInputChange = (dimension: string, inputValue: string) => {
+    // Handle both typing and increment/decrement arrows
+    const numValue = inputValue === '' ? 0 : Number(inputValue);
 
-    if (statusResponse.data.status === 'completed') {
-      // Open BP in new tab
-      const downloadUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/projects/${projectId}/business-plans/download`;
-      window.open(downloadUrl, '_blank');
-    } else {
-      setError('BP文档尚未上传或处理中');
+    // Only update if it's a valid number
+    if (!isNaN(numValue)) {
+      handleScoreChange(dimension, 'score', numValue);
     }
-  } catch (err: any) {
-    if (err.response?.status === 404) {
-      setError('未找到BP文档，请先上传BP文档');
-    } else {
-      setError('无法查看BP文档，请稍后重试');
+  };
+
+  const handleViewBP = async () => {
+    try {
+      // First check if BP exists
+      const statusResponse = await businessPlanApi.getStatus(projectId);
+
+      if (statusResponse.data.status === 'completed') {
+        // Open BP in new tab
+        const downloadUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/projects/${projectId}/business-plans/download`;
+        window.open(downloadUrl, '_blank');
+      } else {
+        setError('BP文档尚未上传或处理中');
+      }
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        setError('未找到BP文档，请先上传BP文档');
+      } else {
+        setError('无法查看BP文档，请稍后重试');
+      }
     }
-  }
-};
+  };
 
   const handleSave = async () => {
     try {
-      await scoreApi.updateScores(projectId, editedScores);
+      await scoreApi.updateScores(projectId, { dimensions: editedScores });
       setScores(editedScores);
       setIsEditing(false);
+      setError("");
     } catch (err: any) {
       setError(err.response?.data?.message || "保存评分失败");
     }
@@ -146,12 +158,42 @@ export default function ProjectDetailPage() {
     setShowHistory(true);
     setHistoryLoading(true);
     try {
-      const res = await projectApi.list({ search: project.enterprise_name });
-      setHistoryList(res.data.items || []);
+      const response = await scoreApi.getScoreHistory(projectId);
+      setHistoryList(response.data.history || []);
+    } catch (err: any) {
+      console.error("Failed to fetch score history:", err);
+      if (err.response?.status === 404) {
+        setHistoryList([]);
+      } else {
+        setError("获取评分历史失败");
+        setHistoryList([]);
+      }
     } finally {
       setHistoryLoading(false);
     }
   };
+
+  const handleDeleteProject = async () => {
+  setDeleting(true);
+  try {
+    await projectApi.delete(projectId);
+
+    // Show success message briefly before redirecting
+    setError(""); // Clear any existing errors
+
+    // Redirect to dashboard after successful deletion
+    setTimeout(() => {
+      router.push('/dashboard');
+    }, 500);
+
+  } catch (err: any) {
+    console.error("Project deletion failed:", err);
+    setError(err.response?.data?.message || "删除项目失败，请重试");
+    setShowDeleteConfirm(false); // Close confirmation dialog on error
+  } finally {
+    setDeleting(false);
+  }
+};
 
   // 评分维度图标和配色
   const dimensionMeta: Record<string, { icon: string; color: string; text: string }> = {
@@ -289,9 +331,28 @@ export default function ProjectDetailPage() {
                             type="number"
                             min="0"
                             max={score.max_score}
-                            value={editedScore?.score || score.score}
-                            onChange={(e) => handleScoreChange(score.dimension, 'score', Number(e.target.value))}
+                            step="1"
+                            value={editedScore?.score ?? score.score}
+                            // Handle both onChange and onInput for better browser compatibility
+                            onChange={(e) => handleScoreInputChange(score.dimension, e.target.value)}
+                            onInput={(e) => handleScoreInputChange(score.dimension, (e.target as HTMLInputElement).value)}
+                            // Add onBlur to ensure value is validated when user leaves the field
+                            onBlur={(e) => {
+                              const value = e.target.value;
+                              const numValue = value === '' ? 0 : Number(value);
+                              if (!isNaN(numValue)) {
+                                const maxScore = score.max_score;
+                                const validatedScore = Math.max(0, Math.min(numValue, maxScore));
+                                handleScoreChange(score.dimension, 'score', validatedScore);
+                                // Force the input to show the validated value
+                                e.target.value = validatedScore.toString();
+                              }
+                            }}
                             className="w-12 text-center font-bold text-lg bg-transparent outline-none border-none focus:ring-0 text-gray-800"
+                            style={{
+                              // Ensure the spinner arrows are visible and functional
+                              MozAppearance: 'textfield'
+                            }}
                           />
                           <span className="mx-1 text-gray-300 text-lg font-normal select-none">/</span>
                           <span className="text-gray-400 text-base font-normal select-none">{score.max_score}</span>
@@ -299,6 +360,8 @@ export default function ProjectDetailPage() {
                       ) : (
                         <span className={`ml-auto text-lg font-bold ${meta.text} transition-all duration-300`}>{score.score}/{score.max_score}</span>
                       )}
+
+
                     </div>
                     {isEditing ? (
                       <textarea
@@ -340,6 +403,15 @@ export default function ProjectDetailPage() {
                 </>
               ) : (
                 <>
+                  {/* 删除项目按钮 */}
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={deleting}
+                    className="px-6 py-3 rounded-xl border border-red-300 text-red-600 font-semibold text-lg hover:bg-red-50 transition-all duration-200 hover:border-red-400 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <i className={`fa-solid ${deleting ? 'fa-spinner fa-spin' : 'fa-trash'} mr-2`}></i>
+                    {deleting ? '删除中...' : '删除项目'}
+                  </button>
                   <button
                     onClick={() => setIsEditing(true)}
                     className="px-6 py-3 rounded-xl border border-gray-300 text-gray-600 font-semibold text-lg hover:bg-gray-50 transition flex items-center"
@@ -360,52 +432,147 @@ export default function ProjectDetailPage() {
         {/* 企业评分历史弹窗 */}
         {showHistory && (
           <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-3xl relative">
+            <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-4xl max-h-[80vh] overflow-hidden relative">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
                 onClick={() => setShowHistory(false)}
               >
                 <i className="fa-solid fa-xmark text-2xl"></i>
               </button>
-              <div className="text-xl font-bold mb-6 text-gray-800">企业评分历史</div>
+
+              <div className="text-xl font-bold mb-6 text-gray-800 flex items-center">
+                <i className="fa-solid fa-clock-rotate-left text-purple-500 mr-2"></i>
+                评分变更历史
+              </div>
+
+              <div className="text-sm text-gray-600 mb-4">
+                项目：{project?.project_name} | 企业：{project?.enterprise_name}
+              </div>
+
               {historyLoading ? (
-                <div className="text-center text-gray-600 text-base">加载中...</div>
+                <div className="text-center text-gray-600 text-base py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
+                  加载历史记录中...
+                </div>
+              ) : historyList.length === 0 ? (
+                <div className="text-center text-gray-600 text-base py-8">
+                  <i className="fa-solid fa-history text-4xl text-gray-300 mb-4"></i>
+                  <div>暂无评分变更历史</div>
+                  <div className="text-sm text-gray-400 mt-2">首次评分后将在此显示历史记录</div>
+                </div>
               ) : (
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="text-gray-600 text-base border-b">
-                      <th className="py-3 font-semibold">项目名称</th>
-                      <th className="py-3 font-semibold">评审时间</th>
-                      <th className="py-3 font-semibold">总分</th>
-                      <th className="py-3 font-semibold">状态</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyList.length === 0 ? (
-                      <tr><td colSpan={4} className="py-6 text-center text-gray-600 text-base">暂无历史记录</td></tr>
-                    ) : (
-                      historyList.map(item => (
-                        <tr key={item.id} className="border-t hover:bg-gray-50">
-                          <td className="py-4 text-gray-800 text-base">{item.project_name}</td>
-                          <td className="py-4 text-gray-700 text-base">{item.created_at?.slice(0, 10)}</td>
-                          <td className="py-4 text-gray-800 text-base font-medium">{item.total_score ?? '--'}</td>
-                          <td className="py-4">
-                            {item.status === 'completed' && (
-                              <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs">已完成</span>
-                            )}
-                            {item.status === 'processing' && (
-                              <span className="inline-block px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs">待评审</span>
-                            )}
-                            {item.status === '补充信息' && (
-                              <span className="inline-block px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs">补充信息</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                <div className="overflow-y-auto max-h-96">
+                  <div className="space-y-4">
+                    {historyList.map((historyItem, index) => (
+                      <div key={historyItem.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center">
+                            <span className="inline-block w-6 h-6 bg-purple-100 text-purple-600 rounded-full text-xs flex items-center justify-center font-semibold mr-3">
+                              {index + 1}
+                            </span>
+                            <div>
+                              <div className="font-semibold text-gray-800">
+                                总分：{historyItem.total_score}/100
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {historyItem.modification_notes || '评分更新'}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-gray-600">
+                              {new Date(historyItem.created_at).toLocaleDateString('zh-CN', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              修改人：{historyItem.modified_by}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Show dimension breakdown for this history entry */}
+                        <div className="grid grid-cols-5 gap-2 text-xs">
+                          {Object.entries(historyItem.dimensions || {}).map(([dimName, dimData]: [string, any]) => (
+                            <div key={dimName} className="bg-gray-100 rounded p-2">
+                              <div className="font-semibold text-gray-700">{dimName}</div>
+                              <div className="text-purple-600">{dimData.score}/{dimData.max_score}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
+
+              <div className="mt-6 pt-4 border-t flex justify-end">
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="px-6 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* 删除确认对话框 */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative">
+              <div className="text-center">
+                {/* Warning Icon */}
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <i className="fa-solid fa-exclamation-triangle text-red-500 text-2xl"></i>
+                </div>
+
+                {/* Title */}
+                <div className="text-xl font-bold text-gray-800 mb-2">确认删除项目</div>
+
+                {/* Warning Message */}
+                <div className="text-gray-600 mb-2">
+                  您即将删除以下项目：
+                </div>
+
+                {/* Project Details */}
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <div className="font-semibold text-gray-800">{project?.project_name}</div>
+                  <div className="text-sm text-gray-600">{project?.enterprise_name}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    创建时间：{project?.created_at?.slice(0, 10)}
+                  </div>
+                </div>
+
+                {/* Warning Text */}
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 mb-6">
+                  <i className="fa-solid fa-warning mr-2"></i>
+                  <strong>警告：</strong>此操作无法撤销！删除后将永久移除项目的所有数据，包括评分记录、BP文档和历史记录。
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleting}
+                    className="flex-1 px-4 py-3 rounded-xl border border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition disabled:opacity-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleDeleteProject}
+                    disabled={deleting}
+                    className="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition disabled:opacity-50 flex items-center justify-center"
+                  >
+                    <i className={`fa-solid ${deleting ? 'fa-spinner fa-spin' : 'fa-trash'} mr-2`}></i>
+                    {deleting ? '删除中...' : '确认删除'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -102,3 +102,26 @@ export interface ApiError {
   message: string;
   errors?: string[];
 }
+
+export interface ScoreHistoryItem {
+  id: string;
+  total_score: number;
+  modified_by: string;
+  modification_notes: string;
+  created_at: string;
+  dimensions: {
+    [dimensionName: string]: {
+      score: number;
+      max_score: number;
+      comments: string;
+      sub_dimensions: SubDimensionScore[];
+    };
+  };
+}
+
+export interface ScoreHistoryResponse {
+  project_id: string;
+  project_name: string;
+  enterprise_name: string;
+  history: ScoreHistoryItem[];
+}
