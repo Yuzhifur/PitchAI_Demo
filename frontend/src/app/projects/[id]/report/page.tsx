@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { projectApi, scoreApi } from "@/lib/api";
-import type { Score, MissingInfo } from "@/lib/types";
+import type { Score, MissingInfo} from "@/lib/types";
+import { getStatusTag, getRecommendationFromScore } from "@/lib/types";
 import Layout from '@/components/Layout';
 import { businessPlanApi } from "@/lib/api";
 
@@ -64,24 +65,36 @@ export default function ProjectReportPage() {
   }, [projectId]);
 
   const handleDownloadReport = () => {
-  // Add minimal print styles to hide the button
-  const style = document.createElement('style');
-  style.textContent = `
-    @media print {
-      button { display: none !important; }
-      .shadow, .shadow-2xl { box-shadow: none !important; }
+    // Add minimal print styles to hide the button
+    const style = document.createElement('style');
+    style.textContent = `
+      @media print {
+        button { display: none !important; }
+        .shadow, .shadow-2xl { box-shadow: none !important; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Use browser's native print
+    window.print();
+
+    // Clean up the style after printing
+    setTimeout(() => {
+      document.head.removeChild(style);
+    }, 1000);
+  };
+
+  const getRecommendationFromScore = (score: number | null | undefined): string => {
+    if (score === null || score === undefined) {
+      return '等待评估';
+    } else if (score >= 80) {
+      return '优秀项目，可考虑给予企业工位';
+    } else if (score >= 60) {
+      return '符合基本入孵条件，可注册在工研院';
+    } else {
+      return '暂不符合入孵条件，建议完善后重新提交';
     }
-  `;
-  document.head.appendChild(style);
-
-  // Use browser's native print
-  window.print();
-
-  // Clean up the style after printing
-  setTimeout(() => {
-    document.head.removeChild(style);
-  }, 1000);
-};
+  };
 
   // 评分维度图标和配色
   const dimensionMeta: Record<string, { icon: string; color: string; text: string }> = {
@@ -132,7 +145,37 @@ export default function ProjectReportPage() {
               <div className="text-gray-400 text-sm mb-2">提交时间：{project.created_at?.slice(0, 10)}</div>
               <div className="flex items-center mb-2">
                 <span className="text-lg font-bold text-purple-600 mr-4">总分：{project.total_score ?? '--'}/100</span>
-                <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs"><i className="fa-solid fa-thumbs-up mr-1"></i> {project.review_result || '评审通过'}</span>
+                {(() => {
+                  const recommendation = getRecommendationFromScore(project.total_score);
+
+                  // Determine icon and color based on score
+                  let iconClass = "fa-clock";
+                  let bgColor = "bg-gray-100";
+                  let textColor = "text-gray-700";
+
+                  if (project.total_score !== null && project.total_score !== undefined) {
+                    if (project.total_score >= 80) {
+                      iconClass = "fa-check-circle";
+                      bgColor = "bg-green-100";
+                      textColor = "text-green-700";
+                    } else if (project.total_score >= 60) {
+                      iconClass = "fa-clock";
+                      bgColor = "bg-yellow-100";
+                      textColor = "text-yellow-700";
+                    } else {
+                      iconClass = "fa-times-circle";
+                      bgColor = "bg-red-100";
+                      textColor = "text-red-700";
+                    }
+                  }
+
+                  return (
+                    <span className={`inline-block px-3 py-1 rounded-full ${bgColor} ${textColor} text-xs`}>
+                      <i className={`fa-solid ${iconClass} mr-1`}></i>
+                      {recommendation}
+                    </span>
+                  );
+                })()}
               </div>
               <div className="mb-2">
                 <div className="mb-2">

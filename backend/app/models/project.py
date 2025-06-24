@@ -7,10 +7,10 @@ from enum import Enum
 
 
 class ProjectStatus(str, Enum):
-    PENDING_REVIEW = "pending_review"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    NEEDS_INFO = "needs_info"
+    PENDING_REVIEW = "pending_review"  # Score 60-79: 待评审
+    PROCESSING = "processing"          # No score yet: 处理中
+    COMPLETED = "completed"            # Score ≥80: 已完成
+    FAILED = "failed"                  # Score <60: 未通过
 
 
 class ReviewResult(str, Enum):
@@ -39,7 +39,7 @@ class ProjectUpdate(BaseModel):
 
 class ProjectInDB(ProjectBase):
     id: str
-    status: ProjectStatus = ProjectStatus.PENDING_REVIEW
+    status: ProjectStatus = ProjectStatus.PROCESSING
     total_score: Optional[float] = None
     review_result: Optional[ReviewResult] = None
     created_at: datetime
@@ -48,6 +48,27 @@ class ProjectInDB(ProjectBase):
     class Config:
         from_attributes = True
 
+    def get_status_display(self) -> str:
+        """Get user-friendly status display text"""
+        status_map = {
+            ProjectStatus.PENDING_REVIEW: "待评审",
+            ProjectStatus.PROCESSING: "处理中",
+            ProjectStatus.COMPLETED: "已完成",
+            ProjectStatus.FAILED: "未通过"
+        }
+        return status_map.get(self.status, "未知")
+
+    def get_status_category(self) -> str:
+        """Get status category for grouping"""
+        if self.status == ProjectStatus.COMPLETED:
+            return "excellent"  # ≥80分
+        elif self.status == ProjectStatus.PENDING_REVIEW:
+            return "good"       # 60-79分
+        elif self.status == ProjectStatus.FAILED:
+            return "poor"       # <60分
+        else:
+            return "processing" # 处理中
+
 
 class ProjectList(BaseModel):
     total: int
@@ -55,9 +76,11 @@ class ProjectList(BaseModel):
 
 
 class ProjectStatistics(BaseModel):
-    pending_review: int
-    completed: int
-    needs_info: int
+    pending_review: int      # 60-79分: 待评审
+    completed: int           # ≥80分: 已完成
+    failed: int              # <60分: 未通过
+    processing: int          # 无评分: 处理中
+    needs_info: int = 0      # DEPRECATED: For backward compatibility
     recent_projects: List[ProjectInDB]
 
 
@@ -75,3 +98,27 @@ class ProjectListParams(BaseModel):
 
     class Config:
         extra = "forbid"
+
+
+def calculate_status_from_score(total_score: Optional[float]) -> ProjectStatus:
+    """Calculate project status based on total score"""
+    if total_score is None:
+        return ProjectStatus.PROCESSING
+    elif total_score >= 80:
+        return ProjectStatus.COMPLETED
+    elif total_score >= 60:
+        return ProjectStatus.PENDING_REVIEW
+    else:
+        return ProjectStatus.FAILED
+
+
+def calculate_review_result_from_score(total_score: Optional[float]) -> Optional[ReviewResult]:
+    """Calculate review result based on total score"""
+    if total_score is None:
+        return None
+    elif total_score >= 80:
+        return ReviewResult.PASS
+    elif total_score >= 60:
+        return ReviewResult.CONDITIONAL
+    else:
+        return ReviewResult.FAIL

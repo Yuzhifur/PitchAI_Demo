@@ -12,7 +12,9 @@ from ...models.project import (
     ProjectStatistics,
     ProjectDetail,
     ProjectListParams,
-    ProjectStatus
+    ProjectStatus,
+    calculate_status_from_score,
+    calculate_review_result_from_score
 )
 from ...core.database import db
 
@@ -26,7 +28,7 @@ def row_to_project(row: dict) -> ProjectInDB:
         enterprise_name=row['enterprise_name'],
         project_name=row['project_name'],
         description=row['description'],
-        status=row['status'],
+        status=ProjectStatus(row['status']),
         total_score=float(row['total_score']) if row['total_score'] else None,
         review_result=row['review_result'],
         created_at=row['created_at'],
@@ -36,14 +38,15 @@ def row_to_project(row: dict) -> ProjectInDB:
 
 @router.get("/projects/statistics", response_model=ProjectStatistics)
 async def get_project_statistics():
-    """Get project statistics for dashboard"""
+    """Get project statistics for dashboard with new status categories"""
     supabase = db.get_client()
 
     try:
-        # Get counts by status
+        # Get counts by new status categories
         pending_result = supabase.table("projects").select("id", count="exact").eq("status", "pending_review").execute()
         completed_result = supabase.table("projects").select("id", count="exact").eq("status", "completed").execute()
-        needs_info_result = supabase.table("projects").select("id", count="exact").eq("status", "needs_info").execute()
+        failed_result = supabase.table("projects").select("id", count="exact").eq("status", "failed").execute()
+        processing_result = supabase.table("projects").select("id", count="exact").eq("status", "processing").execute()
 
         # Get recent projects (last 10)
         recent_result = supabase.table("projects").select("*").order("created_at", desc=True).limit(10).execute()
@@ -51,9 +54,11 @@ async def get_project_statistics():
         recent_projects = [row_to_project(row) for row in recent_result.data]
 
         return ProjectStatistics(
-            pending_review=pending_result.count or 0,
-            completed=completed_result.count or 0,
-            needs_info=needs_info_result.count or 0,
+            pending_review=pending_result.count or 0,    # 60-79分: 待评审
+            completed=completed_result.count or 0,       # ≥80分: 已完成
+            failed=failed_result.count or 0,            # <60分: 未通过
+            processing=processing_result.count or 0,    # 无评分: 处理中
+            needs_info=0,                               # DEPRECATED: Always 0 for compatibility
             recent_projects=recent_projects
         )
 
@@ -64,11 +69,11 @@ async def get_project_statistics():
 @router.get("/projects", response_model=ProjectList)
 async def list_projects(
     page: int = Query(1, ge=1, le=1000),
-    size: int = Query(10, ge=1, le=100),
+    size: int = Query(100, ge=1, le=1000),  # INCREASED DEFAULT AND MAX SIZE FOR DASHBOARD
     status: Optional[ProjectStatus] = Query(None),
     search: Optional[str] = Query(None, max_length=255)
 ):
-    """List projects with pagination, filtering, and search"""
+    """List projects with pagination, filtering, and search - UPDATED FOR DASHBOARD"""
     supabase = db.get_client()
 
     try:
@@ -114,7 +119,7 @@ async def create_project(project: ProjectCreate):
             "enterprise_name": project.enterprise_name,
             "project_name": project.project_name,
             "description": project.description,
-            "status": ProjectStatus.PENDING_REVIEW.value,
+            "status": ProjectStatus.PROCESSING.value,  # Start as processing
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
         }
