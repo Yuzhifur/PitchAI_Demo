@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { projectApi, scoreApi, reportApi, businessPlanApi } from "@/lib/api";
 import Layout from '@/components/Layout';
@@ -11,14 +11,20 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const projectId = params.id as string;
 
+  // Main states
   const [project, setProject] = useState<any>(null);
   const [scores, setScores] = useState<Score[]>([]);
   const [missingInfo, setMissingInfo] = useState<MissingInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [processingStatus, setProcessingStatus] = useState<any>(null);
+
+  // Score editing states - SIMPLIFIED AND FIXED
   const [isEditing, setIsEditing] = useState(false);
-  const [editedScores, setEditedScores] = useState<Score[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const originalScoresRef = useRef<Score[]>([]);
+
+  // Other states
+  const [processingStatus, setProcessingStatus] = useState<any>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [historyList, setHistoryList] = useState<ScoreHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -27,6 +33,94 @@ export default function ProjectDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // FIXED: Score change handler with immediate updates and validation
+  const handleScoreChange = useCallback((dimension: string, field: 'score' | 'comments', value: string | number) => {
+    setScores(currentScores => {
+      return currentScores.map(score => {
+        if (score.dimension !== dimension) return score;
+
+        if (field === 'score') {
+          // Validate score input
+          const numValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+          const validatedScore = Math.max(0, Math.min(numValue, score.max_score));
+
+          return { ...score, score: validatedScore };
+        } else {
+          // Handle comments
+          return { ...score, comments: typeof value === 'string' ? value : String(value) };
+        }
+      });
+    });
+  }, []);
+
+  // FIXED: Save handler with proper state management
+  const handleSave = useCallback(async () => {
+    if (isSaving) return; // Prevent double-saves
+
+    setIsSaving(true);
+    setError("");
+
+    try {
+      console.log("💾 Saving scores:", scores);
+
+      // Send current scores state to API
+      const response = await scoreApi.updateScores(projectId, { dimensions: scores });
+
+      console.log("✅ Save successful, response:", response);
+
+      // Update originalScores ref to new saved state
+      originalScoresRef.current = [...scores];
+
+      // Exit editing mode
+      setIsEditing(false);
+
+      console.log("✅ Editing mode disabled, save complete");
+
+    } catch (err: any) {
+      console.error("❌ Save failed:", err);
+      setError(err.response?.data?.message || "保存评分失败");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [projectId, scores, isSaving]);
+
+  // FIXED: Cancel handler
+  const handleCancel = useCallback(() => {
+    console.log("🔄 Canceling edit, restoring original scores");
+
+    // Restore original scores
+    setScores([...originalScoresRef.current]);
+    setIsEditing(false);
+    setError("");
+  }, []);
+
+  // FIXED: Edit mode handler
+  const handleStartEdit = useCallback(() => {
+    console.log("✏️ Starting edit mode, backing up current scores");
+
+    // Backup current scores before editing
+    originalScoresRef.current = [...scores];
+    setIsEditing(true);
+    setError("");
+  }, [scores]);
+
+  // FIXED: Score input handler with proper validation
+  const handleScoreInputChange = useCallback((dimension: string, inputValue: string) => {
+    // Allow empty string for user experience (will be converted to 0)
+    if (inputValue === '') {
+      handleScoreChange(dimension, 'score', 0);
+      return;
+    }
+
+    // Parse and validate number
+    const numValue = parseFloat(inputValue);
+    if (!isNaN(numValue)) {
+      handleScoreChange(dimension, 'score', numValue);
+    }
+    // If invalid input, ignore it (don't update state)
+  }, [handleScoreChange]);
+
+  // Initial data loading
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -35,17 +129,17 @@ export default function ProjectDetailPage() {
           scoreApi.getScores(projectId),
           scoreApi.getMissingInfo(projectId),
         ]);
+
         setProject(projectRes.data);
         setScores(scoresRes.data.dimensions);
-        setEditedScores(scoresRes.data.dimensions);
+        originalScoresRef.current = [...scoresRes.data.dimensions]; // Initialize backup
         setMissingInfo(missingInfoRes.data.items);
 
-        // Try to get BP info - don't fail if it doesn't exist
+        // Try to get BP info
         try {
           const bpInfoRes = await businessPlanApi.getInfo(projectId);
           setBpInfo(bpInfoRes.data);
         } catch (bpError) {
-          // BP not found is OK, just means no file uploaded yet
           console.log("No BP found for project:", projectId);
         }
       } catch (err: any) {
@@ -57,22 +151,19 @@ export default function ProjectDetailPage() {
     fetchData();
   }, [projectId]);
 
+  // WebSocket for processing status
   useEffect(() => {
     if (project?.status === 'processing') {
       const ws = new WebSocket(`ws://localhost:8000/ws/projects/${projectId}/status`);
-
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         setProcessingStatus(data);
       };
-
-      return () => {
-        ws.close();
-      };
+      return () => ws.close();
     }
   }, [project?.status, projectId]);
 
-  // Add this function to handle BP download
+  // BP download handler
   const handleDownloadBP = async () => {
     if (!bpInfo?.file_exists) {
       setError("商业计划书文件不存在");
@@ -89,6 +180,7 @@ export default function ProjectDetailPage() {
     }
   };
 
+  // Report download handler
   const handleDownloadReport = async () => {
     try {
       const response = await reportApi.downloadReport(projectId);
@@ -104,56 +196,7 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleScoreChange = (dimension: string, field: 'score' | 'comments', value: string | number) => {
-    setEditedScores(prev => prev.map(score =>
-      score.dimension === dimension
-        ? { ...score, [field]: value }
-        : score
-    ));
-  };
-
-  const handleScoreInputChange = (dimension: string, inputValue: string) => {
-    // Handle both typing and increment/decrement arrows
-    const numValue = inputValue === '' ? 0 : Number(inputValue);
-
-    // Only update if it's a valid number
-    if (!isNaN(numValue)) {
-      handleScoreChange(dimension, 'score', numValue);
-    }
-  };
-
-  const handleViewBP = async () => {
-    try {
-      // First check if BP exists
-      const statusResponse = await businessPlanApi.getStatus(projectId);
-
-      if (statusResponse.data.status === 'completed') {
-        // Open BP in new tab
-        const downloadUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/projects/${projectId}/business-plans/download`;
-        window.open(downloadUrl, '_blank');
-      } else {
-        setError('BP文档尚未上传或处理中');
-      }
-    } catch (err: any) {
-      if (err.response?.status === 404) {
-        setError('未找到BP文档，请先上传BP文档');
-      } else {
-        setError('无法查看BP文档，请稍后重试');
-      }
-    }
-  };
-
-  const handleSave = async () => {
-    try {
-      await scoreApi.updateScores(projectId, { dimensions: editedScores });
-      setScores(editedScores);
-      setIsEditing(false);
-      setError("");
-    } catch (err: any) {
-      setError(err.response?.data?.message || "保存评分失败");
-    }
-  };
-
+  // History handlers
   const handleOpenHistory = async () => {
     setShowHistory(true);
     setHistoryLoading(true);
@@ -173,29 +216,22 @@ export default function ProjectDetailPage() {
     }
   };
 
+  // Delete project handler
   const handleDeleteProject = async () => {
-  setDeleting(true);
-  try {
-    await projectApi.delete(projectId);
+    setDeleting(true);
+    try {
+      await projectApi.delete(projectId);
+      setTimeout(() => router.push('/dashboard'), 500);
+    } catch (err: any) {
+      console.error("Project deletion failed:", err);
+      setError(err.response?.data?.message || "删除项目失败，请重试");
+      setShowDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
-    // Show success message briefly before redirecting
-    setError(""); // Clear any existing errors
-
-    // Redirect to dashboard after successful deletion
-    setTimeout(() => {
-      router.push('/dashboard');
-    }, 500);
-
-  } catch (err: any) {
-    console.error("Project deletion failed:", err);
-    setError(err.response?.data?.message || "删除项目失败，请重试");
-    setShowDeleteConfirm(false); // Close confirmation dialog on error
-  } finally {
-    setDeleting(false);
-  }
-};
-
-  // 评分维度图标和配色
+  // Dimension metadata for styling
   const dimensionMeta: Record<string, { icon: string; color: string; text: string }> = {
     "团队能力": { icon: "fa-users", color: "text-purple-400", text: "text-purple-600" },
     "产品&技术": { icon: "fa-microchip", color: "text-pink-400", text: "text-pink-600" },
@@ -230,12 +266,11 @@ export default function ProjectDetailPage() {
   return (
     <Layout>
       <div className="min-h-screen flex flex-col" style={{ fontFamily: 'Inter, sans-serif', background: 'linear-gradient(135deg, #f8fafc 0%, #f3e8ff 100%)' }}>
-        {/* 顶部品牌栏 */}
         <main className="flex-1 flex items-center justify-center">
           <div className="w-full max-w-6xl mx-auto py-12">
-            {/* 项目信息区 */}
+            {/* Project Information Section */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-              {/* 左侧项目信息卡片 */}
+              {/* Project Info Card */}
               <div className="md:col-span-2 bg-white rounded-2xl shadow p-8 flex flex-col justify-between relative">
                 <div>
                   <div className="flex items-center mb-4">
@@ -247,7 +282,8 @@ export default function ProjectDetailPage() {
                       <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs">已完成</span>
                     )}
                   </div>
-                  {/* 评分历史按钮 */}
+
+                  {/* History Button */}
                   <button
                     onClick={handleOpenHistory}
                     className="absolute top-4 right-4 border border-red-400 rounded-lg px-2 py-1 text-red-400 hover:bg-red-50 transition flex items-center"
@@ -255,8 +291,15 @@ export default function ProjectDetailPage() {
                   >
                     <i className="fa-solid fa-clock-rotate-left mr-1"></i>评分历史
                   </button>
-                  <div className="text-gray-500 mb-2"><i className="fa-solid fa-building mr-1"></i> {project.enterprise_name}</div>
-                  <div className="text-gray-400 text-sm mb-4">提交时间：{project.created_at?.slice(0, 10)}</div>
+
+                  <div className="text-gray-500 mb-2">
+                    <i className="fa-solid fa-building mr-1"></i> {project.enterprise_name}
+                  </div>
+                  <div className="text-gray-400 text-sm mb-4">
+                    提交时间：{project.created_at?.slice(0, 10)}
+                  </div>
+
+                  {/* BP Document Link */}
                   <div className="mb-4">
                     {bpInfo?.file_exists ? (
                       <button
@@ -273,6 +316,8 @@ export default function ProjectDetailPage() {
                       </span>
                     )}
                   </div>
+
+                  {/* Team Info */}
                   <div className="bg-gray-100 rounded-xl p-4 flex items-center">
                     <i className="fa-solid fa-user-group text-purple-400 text-xl mr-3"></i>
                     <div>
@@ -282,7 +327,8 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
               </div>
-              {/* 右侧BP文档卡片 */}
+
+              {/* BP Preview Card */}
               <div className="bg-white rounded-2xl shadow p-8 flex flex-col items-center justify-center">
                 <div className="w-full h-64 bg-gray-200 rounded-xl flex items-center justify-center text-gray-400 text-2xl">
                   <div className="text-center">
@@ -297,7 +343,8 @@ export default function ProjectDetailPage() {
                     )}
                   </div>
                 </div>
-                {/* Download button goes here */}
+
+                {/* Download Button */}
                 {bpInfo?.file_exists ? (
                   <button
                     onClick={handleDownloadBP}
@@ -314,96 +361,92 @@ export default function ProjectDetailPage() {
                 )}
               </div>
             </div>
-            {/* 评分维度卡片区 */}
+
+            {/* FIXED: Score Cards Section */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
               {scores.map((score) => {
                 const meta = dimensionMeta[score.dimension] || { icon: "fa-star", color: "text-gray-400", text: "text-gray-600" };
                 const missing = missingInfo.find((m) => m.dimension === score.dimension);
-                const editedScore = editedScores.find(s => s.dimension === score.dimension);
+
                 return (
                   <div key={score.dimension} className="bg-white rounded-2xl shadow p-6 flex flex-col transition-all duration-300 hover:shadow-lg">
                     <div className="flex items-center mb-2">
                       <i className={`fa-solid ${meta.icon} ${meta.color} mr-2`}></i>
                       <span className="font-semibold text-gray-700">{score.dimension}</span>
+
+                      {/* FIXED: Score Input/Display */}
                       {isEditing ? (
                         <div className="ml-auto flex items-center bg-gray-50 rounded-lg px-2 py-1 border border-gray-200 focus-within:ring-2 focus-within:ring-purple-400 transition-all duration-200 shadow-sm">
                           <input
                             type="number"
                             min="0"
                             max={score.max_score}
-                            step="1"
-                            value={editedScore?.score ?? score.score}
-                            // Handle both onChange and onInput for better browser compatibility
+                            step="0.1"
+                            value={score.score}
                             onChange={(e) => handleScoreInputChange(score.dimension, e.target.value)}
-                            onInput={(e) => handleScoreInputChange(score.dimension, (e.target as HTMLInputElement).value)}
-                            // Add onBlur to ensure value is validated when user leaves the field
-                            onBlur={(e) => {
-                              const value = e.target.value;
-                              const numValue = value === '' ? 0 : Number(value);
-                              if (!isNaN(numValue)) {
-                                const maxScore = score.max_score;
-                                const validatedScore = Math.max(0, Math.min(numValue, maxScore));
-                                handleScoreChange(score.dimension, 'score', validatedScore);
-                                // Force the input to show the validated value
-                                e.target.value = validatedScore.toString();
-                              }
-                            }}
-                            className="w-12 text-center font-bold text-lg bg-transparent outline-none border-none focus:ring-0 text-gray-800"
-                            style={{
-                              // Ensure the spinner arrows are visible and functional
-                              MozAppearance: 'textfield'
-                            }}
+                            disabled={isSaving}
+                            className="w-12 text-center font-bold text-lg bg-transparent outline-none border-none focus:ring-0 text-gray-800 disabled:opacity-50"
                           />
                           <span className="mx-1 text-gray-300 text-lg font-normal select-none">/</span>
                           <span className="text-gray-400 text-base font-normal select-none">{score.max_score}</span>
                         </div>
                       ) : (
-                        <span className={`ml-auto text-lg font-bold ${meta.text} transition-all duration-300`}>{score.score}/{score.max_score}</span>
+                        <span className={`ml-auto text-lg font-bold ${meta.text} transition-all duration-300`}>
+                          {score.score}/{score.max_score}
+                        </span>
                       )}
-
-
                     </div>
+
+                    {/* FIXED: Comments Input/Display */}
                     {isEditing ? (
                       <textarea
-                        value={editedScore?.comments || score.comments}
+                        value={score.comments || ''}
                         onChange={(e) => handleScoreChange(score.dimension, 'comments', e.target.value)}
-                        className="text-gray-800 text-base mb-2 p-3 rounded-lg border border-gray-200 resize-none w-full focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-gray-50 hover:bg-white min-h-[80px]"
+                        disabled={isSaving}
+                        className="text-gray-800 text-base mb-2 p-3 rounded-lg border border-gray-200 resize-none w-full focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-gray-50 hover:bg-white min-h-[80px] disabled:opacity-50"
                         rows={3}
                         placeholder="请输入评语..."
                       />
                     ) : (
-                      <div className="text-gray-500 text-sm mb-2 transition-all duration-300">{score.comments}</div>
+                      <div className="text-gray-500 text-sm mb-2 transition-all duration-300">
+                        {score.comments || '暂无评语'}
+                      </div>
                     )}
+
+                    {/* Missing Info Warning */}
                     {missing && (
-                      <div className="text-xs text-yellow-500 mt-2"><i className="fa-solid fa-circle-exclamation mr-1"></i> 缺失：{missing.description}</div>
+                      <div className="text-xs text-yellow-500 mt-2">
+                        <i className="fa-solid fa-circle-exclamation mr-1"></i> 缺失：{missing.description}
+                      </div>
                     )}
                   </div>
                 );
               })}
             </div>
-            {/* 底部操作按钮 */}
+
+            {/* FIXED: Action Buttons */}
             <div className="flex justify-end space-x-4">
               {isEditing ? (
                 <>
                   <button
-                    onClick={() => {
-                      setIsEditing(false);
-                      setEditedScores(scores);
-                    }}
-                    className="px-6 py-3 rounded-xl border border-gray-300 text-gray-600 font-semibold text-lg hover:bg-gray-50 transition-all duration-200 hover:border-gray-400 flex items-center"
+                    onClick={handleCancel}
+                    disabled={isSaving}
+                    className="px-6 py-3 rounded-xl border border-gray-300 text-gray-600 font-semibold text-lg hover:bg-gray-50 transition-all duration-200 hover:border-gray-400 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <i className="fa-solid fa-xmark mr-2"></i> 取消
                   </button>
                   <button
                     onClick={handleSave}
-                    className="px-8 py-3 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-400 text-white font-semibold text-lg shadow hover:from-purple-600 hover:to-pink-500 transition-all duration-200 hover:shadow-lg flex items-center"
+                    disabled={isSaving}
+                    className="px-8 py-3 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-400 text-white font-semibold text-lg shadow hover:from-purple-600 hover:to-pink-500 transition-all duration-200 hover:shadow-lg flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <i className="fa-solid fa-save mr-2"></i> 保存修改
+                    <i className={`fa-solid ${isSaving ? 'fa-spinner fa-spin' : 'fa-save'} mr-2`}></i>
+                    {isSaving ? '保存中...' : '保存修改'}
                   </button>
                 </>
               ) : (
                 <>
-                  {/* 删除项目按钮 */}
+                  {/* Delete Project Button */}
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
                     disabled={deleting}
@@ -412,12 +455,16 @@ export default function ProjectDetailPage() {
                     <i className={`fa-solid ${deleting ? 'fa-spinner fa-spin' : 'fa-trash'} mr-2`}></i>
                     {deleting ? '删除中...' : '删除项目'}
                   </button>
+
+                  {/* Edit Button */}
                   <button
-                    onClick={() => setIsEditing(true)}
+                    onClick={handleStartEdit}
                     className="px-6 py-3 rounded-xl border border-gray-300 text-gray-600 font-semibold text-lg hover:bg-gray-50 transition flex items-center"
                   >
                     <i className="fa-solid fa-pen mr-2"></i> 修改评分
                   </button>
+
+                  {/* Download Report Button */}
                   <button
                     onClick={() => router.push(`/projects/${projectId}/report`)}
                     className="px-8 py-3 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-400 text-white font-semibold text-lg shadow hover:from-purple-600 hover:to-pink-500 transition flex items-center"
@@ -429,7 +476,8 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </main>
-        {/* 企业评分历史弹窗 */}
+
+        {/* History Modal - kept same as before */}
         {showHistory && (
           <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-4xl max-h-[80vh] overflow-hidden relative">
@@ -521,25 +569,20 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         )}
-        {/* 删除确认对话框 */}
+
+        {/* Delete Confirmation Modal - kept same as before */}
         {showDeleteConfirm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative">
               <div className="text-center">
-                {/* Warning Icon */}
                 <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <i className="fa-solid fa-exclamation-triangle text-red-500 text-2xl"></i>
                 </div>
 
-                {/* Title */}
                 <div className="text-xl font-bold text-gray-800 mb-2">确认删除项目</div>
 
-                {/* Warning Message */}
-                <div className="text-gray-600 mb-2">
-                  您即将删除以下项目：
-                </div>
+                <div className="text-gray-600 mb-2">您即将删除以下项目：</div>
 
-                {/* Project Details */}
                 <div className="bg-gray-50 rounded-lg p-4 mb-6">
                   <div className="font-semibold text-gray-800">{project?.project_name}</div>
                   <div className="text-sm text-gray-600">{project?.enterprise_name}</div>
@@ -548,13 +591,11 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
 
-                {/* Warning Text */}
                 <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 mb-6">
                   <i className="fa-solid fa-warning mr-2"></i>
-                  <strong>警告：</strong>此操作无法撤销！删除后将永久移除项目的所有数据，包括评分记录、BP文档和历史记录。
+                  <strong>警告：</strong>此操作无法撤销！删除后将永久移除项目的所有数据。
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex space-x-3">
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
@@ -576,7 +617,8 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         )}
-        {/* 引入FontAwesome CDN */}
+
+        {/* FontAwesome CDN */}
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </div>
     </Layout>
