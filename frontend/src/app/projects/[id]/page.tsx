@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { projectApi, scoreApi, reportApi, businessPlanApi } from "@/lib/api";
 import Layout from '@/components/Layout';
-import type { Score, MissingInfo, ScoreHistoryItem } from "@/lib/types";
+import type { Score, MissingInfo, ScoreHistoryItem} from "@/lib/types";
+import { getStatusTag } from "@/lib/types";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -181,20 +182,6 @@ export default function ProjectDetailPage() {
   };
 
   // Report download handler
-  const handleDownloadReport = async () => {
-    try {
-      const response = await reportApi.downloadReport(projectId);
-      const url = window.URL.createObjectURL(new Blob([response]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `评审报告_${project.project_name}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err: any) {
-      setError(err.response?.data?.message || '下载报告失败');
-    }
-  };
 
   // History handlers
   const handleOpenHistory = async () => {
@@ -275,12 +262,15 @@ export default function ProjectDetailPage() {
                 <div>
                   <div className="flex items-center mb-4">
                     <div className="text-2xl font-bold text-gray-800 mr-4">{project.project_name}</div>
-                    {project.status === 'processing' && (
-                      <span className="inline-block px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs">待评审</span>
-                    )}
-                    {project.status === 'completed' && (
-                      <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs">已完成</span>
-                    )}
+                    {(() => {
+                      const statusTag = getStatusTag(project.status);
+                      return (
+                        <span className={statusTag.className}>
+                          <i className={`fa-solid ${statusTag.icon} mr-1`}></i>
+                          {statusTag.display}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {/* History Button */}

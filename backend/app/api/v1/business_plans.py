@@ -15,6 +15,7 @@ from ...services.storage import storage_service
 from ...services.document.processor import document_processor
 from ...services.evaluation.deepseek_client import deepseek_client
 from ...core.database import db
+from ...models.project import calculate_status_from_score, calculate_review_result_from_score
 
 router = APIRouter()
 
@@ -47,12 +48,8 @@ async def process_and_evaluate_bp(bp_id: str, project_id: str, file_path: str):
             "updated_at": datetime.utcnow().isoformat()
         }).eq("id", bp_id).execute()
 
-        # Step 5: Update project status
-        supabase.table("projects").update({
-            "status": "completed",
-            "updated_at": datetime.utcnow().isoformat()
-        }).eq("id", project_id).execute()
-
+        # UPDATED Step 5: Project status will be automatically updated by database trigger
+        # based on total_score, so we don't need to set it manually here
         print(f"✅ Successfully processed BP {bp_id}")
 
     except Exception as e:
@@ -64,6 +61,12 @@ async def process_and_evaluate_bp(bp_id: str, project_id: str, file_path: str):
             "error_message": f"AI处理失败: {str(e)}",
             "updated_at": datetime.utcnow().isoformat()
         }).eq("id", bp_id).execute()
+
+        # UPDATED: Set project status to failed if AI evaluation fails
+        supabase.table("projects").update({
+            "status": "failed",  # UPDATED: Use failed status for evaluation failures
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", project_id).execute()
 
         # Add missing information record to trigger manual review
         supabase.table("missing_information").insert({

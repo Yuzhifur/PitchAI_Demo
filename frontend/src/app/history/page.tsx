@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { projectApi } from "@/lib/api";
+import { getStatusTag } from "@/lib/types";
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -26,18 +27,33 @@ export default function HistoryPage() {
     fetchProjects();
   }, [search, status]);
 
+  const getStatusDisplay = (status: string): string => {
+    const statusMap = {
+      'pending_review': '待评审',
+      'processing': '处理中',
+      'completed': '已完成',
+      'failed': '未通过'
+    };
+    return statusMap[status as keyof typeof statusMap] || '未知';
+  };
+
   // 状态标签样式
-  const getStatusTag = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs">已完成</span>;
-      case "pending_info":
-        return <span className="inline-block px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs">补充信息</span>;
-      case "processing":
-        return <span className="inline-block px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs">待评审</span>;
-      default:
-        return <span className="inline-block px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs">未知</span>;
-    }
+  const getStatusTagJSX = (status: string) => {
+    const statusConfig = {
+      'pending_review': { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: 'fa-clock' },
+      'processing': { bg: 'bg-purple-100', text: 'text-purple-700', icon: 'fa-spinner fa-spin' },
+      'completed': { bg: 'bg-green-100', text: 'text-green-700', icon: 'fa-check-circle' },
+      'failed': { bg: 'bg-red-100', text: 'text-red-700', icon: 'fa-times-circle' }
+    };
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig['processing'];
+    const display = getStatusDisplay(status);
+
+    return (
+      <span className={`inline-block px-3 py-1 rounded-full ${config.bg} ${config.text} text-xs`}>
+        <i className={`fa-solid ${config.icon} mr-1`}></i>
+        {display}
+      </span>
+    );
   };
 
   return (
@@ -65,9 +81,10 @@ export default function HistoryPage() {
                   onChange={e => setStatus(e.target.value)}
                 >
                   <option value="">全部状态</option>
-                  <option value="processing">待评审</option>
-                  <option value="completed">已完成</option>
-                  <option value="pending_info">补充信息</option>
+                  <option value="processing">处理中</option>
+                  <option value="pending_review">待评审 (60-79分)</option>
+                  <option value="completed">已完成 (≥80分)</option>
+                  <option value="failed">未通过 (&lt;60分)</option>
                 </select>
               </div>
             </div>
@@ -94,7 +111,7 @@ export default function HistoryPage() {
                       <td className="py-3 text-gray-600">{project.enterprise_name}</td>
                       <td className="py-3 text-gray-500">{project.created_at?.slice(0, 10)}</td>
                       <td className="py-3"><span className="inline-block px-3 py-1 rounded-full bg-gradient-to-tr from-purple-500 to-pink-400 text-white text-xs">{project.total_score ?? '--'}</span></td>
-                      <td className="py-3">{getStatusTag(project.status)}</td>
+                      <td className="py-3">{getStatusTagJSX(project.status)}</td>
                       <td className="py-3">
                         <button onClick={() => router.push(`/projects/${project.id}/report`)} className="text-purple-500 hover:underline text-sm">查看报告</button>
                       </td>
@@ -110,4 +127,4 @@ export default function HistoryPage() {
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     </div>
   );
-} 
+}
