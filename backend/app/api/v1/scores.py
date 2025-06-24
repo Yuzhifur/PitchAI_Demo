@@ -18,6 +18,62 @@ from ...core.database import db
 
 router = APIRouter()
 
+async def save_score_history(project_id: str, modification_notes: str = None):
+    """Save current scores to history before updating"""
+    supabase = db.get_client()
+
+    try:
+        # Get current scores
+        scores_result = supabase.table("scores").select("*").eq("project_id", project_id).execute()
+
+        if not scores_result.data:
+            print(f"No existing scores to save for project {project_id}")
+            return
+
+        # Get current project total score
+        project_result = supabase.table("projects").select("total_score").eq("id", project_id).execute()
+        current_total = project_result.data[0]["total_score"] if project_result.data else 0
+
+        # Build dimensions JSON structure
+        dimensions = {}
+
+        for score_row in scores_result.data:
+            # Get sub-dimensions for this score
+            sub_dims_result = supabase.table("score_details").select("*").eq("score_id", score_row['id']).execute()
+
+            sub_dimensions = [
+                {
+                    "sub_dimension": sub['sub_dimension'],
+                    "score": float(sub['score']),
+                    "max_score": float(sub['max_score']),
+                    "comments": sub['comments']
+                }
+                for sub in sub_dims_result.data
+            ]
+
+            dimensions[score_row['dimension']] = {
+                "score": float(score_row['score']),
+                "max_score": float(score_row['max_score']),
+                "comments": score_row['comments'],
+                "sub_dimensions": sub_dimensions
+            }
+
+        # Save to history
+        history_data = {
+            "id": str(uuid.uuid4()),
+            "project_id": project_id,
+            "total_score": float(current_total) if current_total else 0,
+            "dimensions": dimensions,
+            "modified_by": "manual_edit",  # Could be enhanced with actual user info
+            "modification_notes": modification_notes or "手动评分修改",
+            "created_at": datetime.utcnow().isoformat()
+        }
+
+        result = supabase.table("review_history").insert(history_data).execute()
+        print(f"✅ Saved score history for project {project_id}")
+
+    except Exception as e:
+        print(f"⚠️ Failed to save score history: {str(e)}")
 
 def row_to_dimension_score(score_row: dict, sub_dimensions: List[dict]) -> DimensionScore:
     """Convert database rows to DimensionScore model"""
@@ -115,6 +171,9 @@ async def update_project_scores(project_id: str, score_update: ScoreUpdate):
         if not project_result.data:
             raise HTTPException(status_code=404, detail="Project not found")
 
+        # SAVE CURRENT SCORES TO HISTORY BEFORE UPDATING
+        await save_score_history(project_id, "手动评分修改")
+
         # Begin transaction-like operations
         # First, delete existing scores and sub-scores for this project
         existing_scores = supabase.table("scores").select("id").eq("project_id", project_id).execute()
@@ -126,7 +185,7 @@ async def update_project_scores(project_id: str, score_update: ScoreUpdate):
         # Delete main dimension scores
         supabase.table("scores").delete().eq("project_id", project_id).execute()
 
-        # Insert new scores
+        # Insert new scores (rest of function remains the same)
         for dimension in score_update.dimensions:
             # Insert main dimension score
             score_id = str(uuid.uuid4())
@@ -171,6 +230,50 @@ async def update_project_scores(project_id: str, score_update: ScoreUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update scores: {str(e)}")
 
+@router.get("/projects/{project_id}/scores/history")
+async def get_project_score_history(project_id: str):
+    """Get score change history for a project"""
+    supabase = db.get_client()
+
+    try:
+        # Validate UUID format
+        try:
+            uuid.UUID(project_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+        # Check if project exists
+        project_result = supabase.table("projects").select("id, project_name, enterprise_name").eq("id", project_id).execute()
+        if not project_result.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        project_info = project_result.data[0]
+
+        # Get score history
+        history_result = supabase.table("review_history").select("*").eq("project_id", project_id).order("created_at", desc=True).execute()
+
+        history_items = []
+        for record in history_result.data:
+            history_items.append({
+                "id": record["id"],
+                "total_score": float(record["total_score"]),
+                "modified_by": record["modified_by"],
+                "modification_notes": record["modification_notes"],
+                "created_at": record["created_at"],
+                "dimensions": record["dimensions"]  # JSON object with full dimension details
+            })
+
+        return {
+            "project_id": project_id,
+            "project_name": project_info["project_name"],
+            "enterprise_name": project_info["enterprise_name"],
+            "history": history_items
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get score history: {str(e)}")
 
 @router.get("/projects/{project_id}/missing-information", response_model=MissingInformationList)
 async def get_missing_information(project_id: str):
