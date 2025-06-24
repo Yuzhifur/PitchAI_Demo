@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { projectApi, scoreApi, reportApi } from "@/lib/api";
+import { projectApi, scoreApi } from "@/lib/api";
 import type { Score, MissingInfo } from "@/lib/types";
 import Layout from '@/components/Layout';
 import { businessPlanApi } from "@/lib/api";
@@ -63,20 +63,25 @@ export default function ProjectReportPage() {
     fetchData();
   }, [projectId]);
 
-  const handleDownloadReport = async () => {
-    try {
-      const response = await reportApi.downloadReport(projectId);
-      const url = window.URL.createObjectURL(new Blob([response]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `评审报告_${project.project_name}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err: any) {
-      setError(err.response?.data?.message || '下载报告失败');
+  const handleDownloadReport = () => {
+  // Add minimal print styles to hide the button
+  const style = document.createElement('style');
+  style.textContent = `
+    @media print {
+      button { display: none !important; }
+      .shadow, .shadow-2xl { box-shadow: none !important; }
     }
-  };
+  `;
+  document.head.appendChild(style);
+
+  // Use browser's native print
+  window.print();
+
+  // Clean up the style after printing
+  setTimeout(() => {
+    document.head.removeChild(style);
+  }, 1000);
+};
 
   // 评分维度图标和配色
   const dimensionMeta: Record<string, { icon: string; color: string; text: string }> = {
@@ -117,8 +122,9 @@ export default function ProjectReportPage() {
                 onClick={handleDownloadReport}
                 className="absolute top-6 right-6 px-5 py-2 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-400 text-white font-semibold shadow hover:from-purple-600 hover:to-pink-500 transition flex items-center z-10"
               >
-                <i className="fa-solid fa-file-arrow-down mr-2"></i> 下载PDF报告
+                <i className="fa-solid fa-print mr-2"></i> 保存为PDF
               </button>
+
               <div className="flex items-center mb-4">
                 <div className="text-2xl font-bold text-gray-800 mr-4">{project.project_name}</div>
                 <span className="inline-block px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs">{project.enterprise_name}</span>
@@ -134,7 +140,7 @@ export default function ProjectReportPage() {
                     <button
                       onClick={handleDownloadBP}
                       disabled={downloadingBP}
-                      className="text-purple-500 hover:underline text-sm flex items-center disabled:opacity-50"
+                      className="text-purple-500 hover:underline text-sm flex items-center disabled:opacity-50 no-print"
                     >
                       <i className={`fa-solid ${downloadingBP ? 'fa-spinner fa-spin' : 'fa-file-pdf'} mr-1`}></i>
                       {downloadingBP ? '下载中...' : '查看BP文档'}
