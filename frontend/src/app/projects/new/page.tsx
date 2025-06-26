@@ -11,6 +11,7 @@ export default function NewProjectPage() {
     enterprise_name: "",
     project_name: "",
     description: "",
+    team_members: "", // NEW: Team members field
   });
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -83,7 +84,7 @@ export default function NewProjectPage() {
       }, 1000);
 
     } catch (err: any) {
-      console.error("Project creation error:", err);
+      console.error("Project crezation error:", err);
 
       // FIXED: More specific error messages
       if (err.response?.status === 400) {
@@ -174,6 +175,26 @@ export default function NewProjectPage() {
                     onChange={handleInputChange}
                     disabled={loading}
                   />
+                </div>
+
+                {/* NEW: Team Members Field */}
+                <div>
+                  <label className="block text-gray-700 font-medium mb-1" htmlFor="team_members">
+                    团队成员（可选）
+                  </label>
+                  <textarea
+                    id="team_members"
+                    name="team_members"
+                    placeholder="请输入团队成员信息，例如：张三（CEO）、李四（CTO）、王五（COO）"
+                    rows={3}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:outline-none bg-gray-50 text-gray-800"
+                    value={formData.team_members}
+                    onChange={handleInputChange}
+                    disabled={loading}
+                  />
+                  <div className="text-xs text-gray-500 mt-1">
+                    最多1000字符，可以包含职位信息和联系方式
+                  </div>
                 </div>
 
                 <div>

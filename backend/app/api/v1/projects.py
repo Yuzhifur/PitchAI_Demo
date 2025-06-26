@@ -28,6 +28,7 @@ def row_to_project(row: dict) -> ProjectInDB:
         enterprise_name=row['enterprise_name'],
         project_name=row['project_name'],
         description=row['description'],
+        team_members=row.get('team_members'),  # NEW: Handle team_members field
         status=ProjectStatus(row['status']),
         total_score=float(row['total_score']) if row['total_score'] else None,
         review_result=row['review_result'],
@@ -119,6 +120,7 @@ async def create_project(project: ProjectCreate):
             "enterprise_name": project.enterprise_name,
             "project_name": project.project_name,
             "description": project.description,
+            "team_members": project.team_members,  # NEW: Include team_members
             "status": ProjectStatus.PROCESSING.value,  # Start as processing
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
@@ -166,7 +168,7 @@ async def get_project_detail(project_id: str):
 
 @router.put("/projects/{project_id}", response_model=ProjectInDB)
 async def update_project(project_id: str, update_data: ProjectUpdate):
-    """Update project information"""
+    """Update project information including team members"""
     supabase = db.get_client()
 
     try:
@@ -185,7 +187,7 @@ async def update_project(project_id: str, update_data: ProjectUpdate):
         update_dict = {}
         for field, value in update_data.dict().items():
             if value is not None:
-                if isinstance(value, Enum):
+                if hasattr(value, 'value'):  # Handle Enum types
                     update_dict[field] = value.value
                 else:
                     update_dict[field] = value
@@ -238,3 +240,42 @@ async def delete_project(project_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete project: {str(e)}")
+
+
+# NEW: Team members specific endpoint for granular updates
+@router.put("/projects/{project_id}/team-members")
+async def update_team_members(project_id: str, team_members: str):
+    """Update only team members for a project"""
+    supabase = db.get_client()
+
+    try:
+        # Validate UUID format
+        try:
+            uuid.UUID(project_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+        # Check if project exists
+        existing = supabase.table("projects").select("id").eq("id", project_id).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Validate team members length
+        if len(team_members) > 1000:
+            raise HTTPException(status_code=400, detail="Team members text too long (max 1000 characters)")
+
+        # Update team members
+        result = supabase.table("projects").update({
+            "team_members": team_members,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", project_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update team members")
+
+        return {"message": "Team members updated successfully", "team_members": team_members}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update team members: {str(e)}")

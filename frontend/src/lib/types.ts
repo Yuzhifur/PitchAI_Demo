@@ -7,7 +7,8 @@ export interface Project {
   enterprise_name: string;
   project_name: string;
   description?: string;
-  status: 'pending_review' | 'processing' | 'completed' | 'failed';  // UPDATED STATUS OPTIONS
+  team_members?: string;  // NEW: Team members field
+  status: 'pending_review' | 'processing' | 'completed' | 'failed';
   total_score?: number;
   review_result?: 'pass' | 'fail' | 'conditional';
   created_at: string;
@@ -18,6 +19,7 @@ export interface ProjectCreateData {
   enterprise_name: string;
   project_name: string;
   description?: string;
+  team_members?: string;  // NEW: Team members field
 }
 
 export interface ProjectListParams {
@@ -61,13 +63,41 @@ export interface ProjectScores {
 }
 
 export interface MissingInfo {
+  id?: string;  // NEW: Optional ID for editing
+  dimension: string;
+  information_type: string;
+  description: string;
+  status: string;
+  created_at?: string;  // NEW: Optional timestamps
+  updated_at?: string;
+}
+
+export interface MissingInfoResponse {
+  items: MissingInfo[];
+}
+
+// NEW: Missing information management interfaces
+export interface MissingInfoCreateData {
+  dimension: string;
+  information_type: string;
+  description: string;
+  status?: string;
+}
+
+export interface MissingInfoUpdateData {
   dimension: string;
   information_type: string;
   description: string;
   status: string;
 }
 
-export interface MissingInfoResponse {
+export interface TeamMembersUpdateData {
+  team_members: string;
+}
+
+// NEW: Bulk operations
+export interface BulkMissingInfoOperation {
+  action: 'add' | 'delete' | 'update';
   items: MissingInfo[];
 }
 
@@ -160,6 +190,37 @@ export const STATUS_COLOR_MAP = {
     icon: 'fa-times-circle'
   }
 } as const;
+
+// Helper functions for team members
+export const getTeamMembersDisplay = (teamMembers?: string): string => {
+  return teamMembers?.trim() || '团队信息待补充';
+};
+
+export const validateTeamMembers = (teamMembers: string): string | null => {
+  if (teamMembers.length > 1000) {
+    return '团队成员信息不能超过1000字符';
+  }
+  return null;
+};
+
+// Helper functions for missing information
+export const getMissingInfoStatusDisplay = (status: string): string => {
+  const statusMap = {
+    'pending': '待处理',
+    'provided': '已提供',
+    'resolved': '已解决'
+  };
+  return statusMap[status as keyof typeof statusMap] || status;
+};
+
+export const getMissingInfoStatusColor = (status: string) => {
+  const colorMap = {
+    'pending': { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: 'fa-clock' },
+    'provided': { bg: 'bg-blue-100', text: 'text-blue-700', icon: 'fa-info-circle' },
+    'resolved': { bg: 'bg-green-100', text: 'text-green-700', icon: 'fa-check-circle' }
+  };
+  return colorMap[status as keyof typeof colorMap] || colorMap['pending'];
+};
 
 export const getStatusDisplay = (status: Project['status']): string => {
   return STATUS_DISPLAY_MAP[status] || '未知';

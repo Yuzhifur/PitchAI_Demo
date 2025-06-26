@@ -12,7 +12,11 @@ import type {
   ScoreUpdateData,
   ScoreSummary,
   ApiResponse,
-  ScoreHistoryResponse
+  ScoreHistoryResponse,
+  // FIXED: Added missing imports
+  MissingInfo,
+  MissingInfoCreateData,
+  MissingInfoUpdateData
 } from './types';
 
 // Create axios instance with base configuration
@@ -62,8 +66,30 @@ const handleResponse = <T>(response: AxiosResponse<any>): ApiResponse<T> => {
   };
 };
 
+// FIXED: Declare extended interfaces to avoid property assignment errors
+interface ExtendedProjectApi {
+  getStatistics: () => Promise<ApiResponse<ProjectStatistics>>;
+  list: (params?: ProjectListParams) => Promise<ApiResponse<ProjectListResponse>>;
+  create: (data: ProjectCreateData) => Promise<ApiResponse<Project>>;
+  getDetail: (projectId: string) => Promise<ApiResponse<Project>>;
+  update: (projectId: string, data: Partial<ProjectCreateData>) => Promise<ApiResponse<Project>>;
+  delete: (projectId: string) => Promise<ApiResponse<{ message: string }>>;
+  updateTeamMembers: (projectId: string, teamMembers: string) => Promise<ApiResponse<any>>; // FIXED: Declared property
+}
+
+interface ExtendedScoreApi {
+  getScores: (projectId: string) => Promise<ApiResponse<ProjectScores>>;
+  updateScores: (projectId: string, data: ScoreUpdateData) => Promise<ApiResponse<ProjectScores>>;
+  getMissingInfo: (projectId: string) => Promise<ApiResponse<MissingInfoResponse>>;
+  getScoreSummary: (projectId: string) => Promise<ApiResponse<ScoreSummary>>;
+  getScoreHistory: (projectId: string) => Promise<ApiResponse<ScoreHistoryResponse>>;
+  addMissingInfo: (projectId: string, data: MissingInfoCreateData) => Promise<ApiResponse<any>>; // FIXED: Declared property
+  updateMissingInfo: (projectId: string, infoId: string, data: MissingInfoUpdateData) => Promise<ApiResponse<any>>; // FIXED: Declared property
+  deleteMissingInfo: (projectId: string, infoId: string) => Promise<ApiResponse<any>>; // FIXED: Declared property
+}
+
 // Project API
-export const projectApi = {
+export const projectApi: ExtendedProjectApi = {
   // Get project statistics for dashboard
   getStatistics: async (): Promise<ApiResponse<ProjectStatistics>> => {
     const response = await api.get<ApiResponse<ProjectStatistics>>('/projects/statistics');
@@ -98,10 +124,20 @@ export const projectApi = {
     const response = await api.delete<ApiResponse<{ message: string }>>(`/projects/${projectId}`);
     return handleResponse(response);
   },
+
+  // FIXED: Team members update function properly declared
+  updateTeamMembers: async (projectId: string, teamMembers: string): Promise<ApiResponse<any>> => {
+    const response = await api.put<ApiResponse<any>>(`/projects/${projectId}/team-members`, teamMembers, {
+      headers: {
+        'Content-Type': 'text/plain',
+      },
+    });
+    return handleResponse(response);
+  },
 };
 
 // Score API
-export const scoreApi = {
+export const scoreApi: ExtendedScoreApi = {
   // Get project scores
   getScores: async (projectId: string): Promise<ApiResponse<ProjectScores>> => {
     const response = await api.get<ApiResponse<ProjectScores>>(`/projects/${projectId}/scores`);
@@ -129,6 +165,73 @@ export const scoreApi = {
   // Get score change history
   getScoreHistory: async (projectId: string): Promise<ApiResponse<ScoreHistoryResponse>> => {
     const response = await api.get<ApiResponse<ScoreHistoryResponse>>(`/projects/${projectId}/scores/history`);
+    return handleResponse(response);
+  },
+
+  // FIXED: Missing info functions properly declared
+  addMissingInfo: async (projectId: string, data: MissingInfoCreateData): Promise<ApiResponse<any>> => {
+    const response = await api.post<ApiResponse<any>>(`/projects/${projectId}/missing-information`, data);
+    return handleResponse(response);
+  },
+
+  updateMissingInfo: async (projectId: string, infoId: string, data: MissingInfoUpdateData): Promise<ApiResponse<any>> => {
+    const response = await api.put<ApiResponse<any>>(`/projects/${projectId}/missing-information/${infoId}`, data);
+    return handleResponse(response);
+  },
+
+  deleteMissingInfo: async (projectId: string, infoId: string): Promise<ApiResponse<any>> => {
+    const response = await api.delete<ApiResponse<any>>(`/projects/${projectId}/missing-information/${infoId}`);
+    return handleResponse(response);
+  },
+};
+
+export const missingInfoApi = {
+  // Get all missing information for a project
+  getAll: async (projectId: string): Promise<ApiResponse<MissingInfoResponse>> => {
+    const response = await api.get<ApiResponse<MissingInfoResponse>>(`/projects/${projectId}/missing-information`);
+    return handleResponse(response);
+  },
+
+  // Get specific missing information record
+  getDetail: async (projectId: string, infoId: string): Promise<ApiResponse<MissingInfo>> => {
+    const response = await api.get<ApiResponse<MissingInfo>>(`/projects/${projectId}/missing-information/${infoId}`);
+    return handleResponse(response);
+  },
+
+  // Add new missing information
+  create: async (projectId: string, data: MissingInfoCreateData): Promise<ApiResponse<any>> => {
+    const response = await api.post<ApiResponse<any>>(`/projects/${projectId}/missing-information`, data);
+    return handleResponse(response);
+  },
+
+  // Update existing missing information
+  update: async (projectId: string, infoId: string, data: MissingInfoUpdateData): Promise<ApiResponse<any>> => {
+    const response = await api.put<ApiResponse<any>>(`/projects/${projectId}/missing-information/${infoId}`, data);
+    return handleResponse(response);
+  },
+
+  // Update only status
+  updateStatus: async (projectId: string, infoId: string, status: string): Promise<ApiResponse<any>> => {
+    const response = await api.patch<ApiResponse<any>>(`/projects/${projectId}/missing-information/${infoId}/status`, { status });
+    return handleResponse(response);
+  },
+
+  // Delete missing information
+  delete: async (projectId: string, infoId: string): Promise<ApiResponse<any>> => {
+    const response = await api.delete<ApiResponse<any>>(`/projects/${projectId}/missing-information/${infoId}`);
+    return handleResponse(response);
+  },
+
+  // Bulk operations
+  bulkAdd: async (projectId: string, items: MissingInfoCreateData[]): Promise<ApiResponse<any>> => {
+    const response = await api.post<ApiResponse<any>>(`/projects/${projectId}/missing-information/bulk`, items);
+    return handleResponse(response);
+  },
+
+  bulkDelete: async (projectId: string, infoIds: string[]): Promise<ApiResponse<any>> => {
+    const response = await api.delete<ApiResponse<any>>(`/projects/${projectId}/missing-information/bulk`, {
+      data: infoIds
+    });
     return handleResponse(response);
   },
 };
@@ -225,6 +328,9 @@ export const authApi = {
     localStorage.removeItem('token');
   },
 };
+
+// FIXED: Removed separate teamMembersApi since it's now part of projectApi
+// No need for separate export since projectApi.updateTeamMembers is available
 
 // Export default api instance for custom requests
 export default api;

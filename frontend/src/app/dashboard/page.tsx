@@ -118,6 +118,38 @@ export default function DashboardPage() {
     processing: allProjects.filter(p => p.status === 'processing')
   };
 
+  // FIXED: Define consistent table header component with standardized widths
+  const TableHeader = () => (
+    <thead>
+      <tr className="text-gray-400 text-sm">
+        <th className="py-2 w-1/3 text-left">项目名称</th>
+        <th className="py-2 w-1/4 text-left">企业名称</th>
+        <th className="py-2 w-1/6 text-left">评分</th>
+        <th className="py-2 w-1/6 text-left">操作</th>
+      </tr>
+    </thead>
+  );
+
+  // FIXED: Define consistent table row component with standardized widths
+  const ProjectTableRow = ({ project, showScore = true }: { project: Project; showScore?: boolean }) => (
+    <tr className="border-t hover:bg-gray-50">
+      <td className="py-3 font-medium text-gray-800 w-1/3">{project.project_name}</td>
+      <td className="py-3 text-gray-600 w-1/4">{project.enterprise_name}</td>
+      <td className="py-3 w-1/6">
+        {showScore ? (
+          <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+            {project.total_score}/100
+          </span>
+        ) : (
+          getStatusTag(project.status)
+        )}
+      </td>
+      <td className="py-3 w-1/6">
+        <button onClick={() => router.push(`/projects/${project.id}`)} className="text-purple-500 hover:underline text-sm">查看详情</button>
+      </td>
+    </tr>
+  );
+
   return (
     <Layout>
       <main className="flex-1 flex items-center justify-center">
@@ -156,7 +188,7 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Organized project display by status */}
+          {/* FIXED: Organized project display by status with consistent table structure */}
           <div className="space-y-8">
             {/* Completed projects */}
             {groupedProjects.completed.length > 0 && (
@@ -171,29 +203,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="text-gray-400 text-sm">
-                        <th className="py-2">项目名称</th>
-                        <th className="py-2">企业名称</th>
-                        <th className="py-2">评分</th>
-                        <th className="py-2">操作</th>
-                      </tr>
-                    </thead>
+                  <table className="w-full text-left table-fixed">
+                    <TableHeader />
                     <tbody>
                       {groupedProjects.completed.map((project) => (
-                        <tr key={project.id} className="border-t hover:bg-gray-50">
-                          <td className="py-3 font-medium text-gray-800">{project.project_name}</td>
-                          <td className="py-3 text-gray-600">{project.enterprise_name}</td>
-                          <td className="py-3">
-                            <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
-                              {project.total_score}/100
-                            </span>
-                          </td>
-                          <td className="py-3">
-                            <button onClick={() => router.push(`/projects/${project.id}`)} className="text-purple-500 hover:underline text-sm">查看详情</button>
-                          </td>
-                        </tr>
+                        <ProjectTableRow key={project.id} project={project} showScore={true} />
                       ))}
                     </tbody>
                   </table>
@@ -214,29 +228,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="text-gray-400 text-sm">
-                        <th className="py-2">项目名称</th>
-                        <th className="py-2">企业名称</th>
-                        <th className="py-2">评分</th>
-                        <th className="py-2">操作</th>
-                      </tr>
-                    </thead>
+                  <table className="w-full text-left table-fixed">
+                    <TableHeader />
                     <tbody>
                       {groupedProjects.pending_review.map((project) => (
-                        <tr key={project.id} className="border-t hover:bg-gray-50">
-                          <td className="py-3 font-medium text-gray-800">{project.project_name}</td>
-                          <td className="py-3 text-gray-600">{project.enterprise_name}</td>
-                          <td className="py-3">
-                            <span className="inline-block px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs font-semibold">
-                              {project.total_score}/100
-                            </span>
-                          </td>
-                          <td className="py-3">
-                            <button onClick={() => router.push(`/projects/${project.id}`)} className="text-purple-500 hover:underline text-sm">查看详情</button>
-                          </td>
-                        </tr>
+                        <ProjectTableRow key={project.id} project={project} showScore={true} />
                       ))}
                     </tbody>
                   </table>
@@ -257,29 +253,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="text-gray-400 text-sm">
-                        <th className="py-2">项目名称</th>
-                        <th className="py-2">企业名称</th>
-                        <th className="py-2">评分</th>
-                        <th className="py-2">操作</th>
-                      </tr>
-                    </thead>
+                  <table className="w-full text-left table-fixed">
+                    <TableHeader />
                     <tbody>
                       {groupedProjects.failed.map((project) => (
-                        <tr key={project.id} className="border-t hover:bg-gray-50">
-                          <td className="py-3 font-medium text-gray-800">{project.project_name}</td>
-                          <td className="py-3 text-gray-600">{project.enterprise_name}</td>
-                          <td className="py-3">
-                            <span className="inline-block px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
-                              {project.total_score}/100
-                            </span>
-                          </td>
-                          <td className="py-3">
-                            <button onClick={() => router.push(`/projects/${project.id}`)} className="text-purple-500 hover:underline text-sm">查看详情</button>
-                          </td>
-                        </tr>
+                        <ProjectTableRow key={project.id} project={project} showScore={true} />
                       ))}
                     </tbody>
                   </table>
@@ -300,25 +278,18 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+                  <table className="w-full text-left table-fixed">
                     <thead>
                       <tr className="text-gray-400 text-sm">
-                        <th className="py-2">项目名称</th>
-                        <th className="py-2">企业名称</th>
-                        <th className="py-2">状态</th>
-                        <th className="py-2">操作</th>
+                        <th className="py-2 w-1/3 text-left">项目名称</th>
+                        <th className="py-2 w-1/4 text-left">企业名称</th>
+                        <th className="py-2 w-1/6 text-left">状态</th>
+                        <th className="py-2 w-1/6 text-left">操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {groupedProjects.processing.map((project) => (
-                        <tr key={project.id} className="border-t hover:bg-gray-50">
-                          <td className="py-3 font-medium text-gray-800">{project.project_name}</td>
-                          <td className="py-3 text-gray-600">{project.enterprise_name}</td>
-                          <td className="py-3">{getStatusTag(project.status)}</td>
-                          <td className="py-3">
-                            <button onClick={() => router.push(`/projects/${project.id}`)} className="text-purple-500 hover:underline text-sm">查看详情</button>
-                          </td>
-                        </tr>
+                        <ProjectTableRow key={project.id} project={project} showScore={false} />
                       ))}
                     </tbody>
                   </table>
