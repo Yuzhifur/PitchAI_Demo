@@ -212,7 +212,7 @@ export default function ProjectDetailPage() {
     } finally {
       setMissingInfoSaving(false);
     }
-}, [projectId, missingInfoSaving]);
+  }, [projectId, missingInfoSaving]);
 
   // Initial data loading
   useEffect(() => {
