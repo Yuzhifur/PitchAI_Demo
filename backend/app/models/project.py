@@ -23,6 +23,7 @@ class ProjectBase(BaseModel):
     enterprise_name: str = Field(..., min_length=1, max_length=255)
     project_name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    team_members: Optional[str] = Field(None, max_length=1000)  # NEW: Team members field
 
 
 class ProjectCreate(ProjectBase):
@@ -33,6 +34,7 @@ class ProjectUpdate(BaseModel):
     enterprise_name: Optional[str] = Field(None, min_length=1, max_length=255)
     project_name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    team_members: Optional[str] = Field(None, max_length=1000)  # NEW: Team members field
     status: Optional[ProjectStatus] = None
     review_result: Optional[ReviewResult] = None
 
@@ -68,6 +70,10 @@ class ProjectInDB(ProjectBase):
             return "poor"       # <60分
         else:
             return "processing" # 处理中
+
+    def get_team_members_display(self) -> str:
+        """Get team members with fallback"""
+        return self.team_members or "团队信息待补充"
 
 
 class ProjectList(BaseModel):

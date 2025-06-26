@@ -480,3 +480,216 @@ async def get_project_score_summary(project_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get score summary: {str(e)}")
+
+@router.put("/projects/{project_id}/missing-information/{info_id}")
+async def update_missing_information(
+    project_id: str,
+    info_id: str,
+    missing_info: MissingInformation
+):
+    """Update a missing information record"""
+    supabase = db.get_client()
+
+    try:
+        # Validate UUID formats
+        try:
+            uuid.UUID(project_id)
+            uuid.UUID(info_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid ID format")
+
+        # Check if project exists
+        project_result = supabase.table("projects").select("id").eq("id", project_id).execute()
+        if not project_result.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Check if missing info record exists
+        existing = supabase.table("missing_information").select("id").eq("id", info_id).eq("project_id", project_id).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Missing information record not found")
+
+        # Update the missing information record
+        update_data = {
+            "dimension": missing_info.dimension,
+            "information_type": missing_info.information_type,
+            "description": missing_info.description,
+            "status": missing_info.status,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+
+        result = supabase.table("missing_information").update(update_data).eq("id", info_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update missing information")
+
+        return {"message": "Missing information updated successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update missing information: {str(e)}")
+
+
+@router.patch("/projects/{project_id}/missing-information/{info_id}/status")
+async def update_missing_info_status(
+    project_id: str,
+    info_id: str,
+    status: str
+):
+    """Update status of a specific missing information record"""
+    supabase = db.get_client()
+
+    try:
+        # Validate UUID formats
+        try:
+            uuid.UUID(project_id)
+            uuid.UUID(info_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid ID format")
+
+        # Validate status
+        valid_statuses = ["pending", "provided", "resolved"]
+        if status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+
+        # Update the status
+        result = supabase.table("missing_information").update({
+            "status": status,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", info_id).eq("project_id", project_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Missing information record not found")
+
+        return {"message": "Missing information status updated successfully", "status": status}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update missing information status: {str(e)}")
+
+
+@router.get("/projects/{project_id}/missing-information/{info_id}")
+async def get_missing_information_detail(project_id: str, info_id: str):
+    """Get specific missing information record"""
+    supabase = db.get_client()
+
+    try:
+        # Validate UUID formats
+        try:
+            uuid.UUID(project_id)
+            uuid.UUID(info_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid ID format")
+
+        # Get the missing information record
+        result = supabase.table("missing_information").select("*").eq("id", info_id).eq("project_id", project_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Missing information record not found")
+
+        row = result.data[0]
+        return MissingInformation(
+            dimension=row['dimension'],
+            information_type=row['information_type'],
+            description=row['description'],
+            status=row['status']
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get missing information: {str(e)}")
+
+
+@router.post("/projects/{project_id}/missing-information/bulk")
+async def bulk_add_missing_information(
+    project_id: str,
+    missing_info_list: List[MissingInformation]
+):
+    """Add multiple missing information records at once"""
+    supabase = db.get_client()
+
+    try:
+        # Validate UUID format
+        try:
+            uuid.UUID(project_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+        # Check if project exists
+        project_result = supabase.table("projects").select("id").eq("id", project_id).execute()
+        if not project_result.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Prepare bulk insert data
+        bulk_data = []
+        for missing_info in missing_info_list:
+            missing_data = {
+                "id": str(uuid.uuid4()),
+                "project_id": project_id,
+                "dimension": missing_info.dimension,
+                "information_type": missing_info.information_type,
+                "description": missing_info.description,
+                "status": missing_info.status,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            bulk_data.append(missing_data)
+
+        # Insert all records
+        result = supabase.table("missing_information").insert(bulk_data).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to add missing information records")
+
+        return {
+            "message": f"Successfully added {len(bulk_data)} missing information records",
+            "count": len(bulk_data)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to bulk add missing information: {str(e)}")
+
+
+@router.delete("/projects/{project_id}/missing-information/bulk")
+async def bulk_delete_missing_information(
+    project_id: str,
+    info_ids: List[str]
+):
+    """Delete multiple missing information records at once"""
+    supabase = db.get_client()
+
+    try:
+        # Validate UUID formats
+        try:
+            uuid.UUID(project_id)
+            for info_id in info_ids:
+                uuid.UUID(info_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid ID format")
+
+        # Delete the missing information records
+        result = supabase.table("missing_information").delete().eq("project_id", project_id).in_("id", info_ids).execute()
+
+        deleted_count = len(result.data) if result.data else 0
+
+        # Check if there are any remaining missing information records
+        remaining = supabase.table("missing_information").select("id").eq("project_id", project_id).execute()
+
+        # If no missing information remains, update project status back to completed
+        if not remaining.data:
+            supabase.table("projects").update({
+                "status": "completed",
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", project_id).execute()
+
+        return {
+            "message": f"Successfully deleted {deleted_count} missing information records",
+            "deleted_count": deleted_count
+        }
+
+    except HTTPException:
+        raise
