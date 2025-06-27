@@ -316,19 +316,17 @@ async def get_missing_information(project_id: str):
 
         missing_items = []
         for row in result.data:
-            # FIXED: Ensure ID is always included
+            # FIXED: Use the updated model that includes ID and timestamps
             missing_item = MissingInformation(
+                id=row['id'],
                 dimension=row['dimension'],
                 information_type=row['information_type'],
                 description=row['description'],
-                status=row['status']
+                status=row['status'],
+                created_at=row.get('created_at'),
+                updated_at=row.get('updated_at')
             )
-            # Add the ID separately since it's not in the MissingInformation model
-            missing_item_dict = missing_item.dict()
-            missing_item_dict['id'] = row['id']  # FIXED: Include ID from database
-            missing_item_dict['created_at'] = row.get('created_at')
-            missing_item_dict['updated_at'] = row.get('updated_at')
-            missing_items.append(missing_item_dict)
+            missing_items.append(missing_item)
 
         return {"items": missing_items}
 
@@ -615,10 +613,13 @@ async def get_missing_information_detail(project_id: str, info_id: str):
 
         row = result.data[0]
         return MissingInformation(
+            id=row['id'],
             dimension=row['dimension'],
             information_type=row['information_type'],
             description=row['description'],
-            status=row['status']
+            status=row['status'],
+            created_at=row.get('created_at'),
+            updated_at=row.get('updated_at')
         )
 
     except HTTPException:

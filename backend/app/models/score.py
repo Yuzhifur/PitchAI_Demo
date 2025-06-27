@@ -57,10 +57,13 @@ class ScoreUpdate(BaseModel):
 
 
 class MissingInformation(BaseModel):
+    id: Optional[str] = None  # ID for existing records, None for new ones
     dimension: str
     information_type: str
     description: str
     status: str = "pending"
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 
 class MissingInformationList(BaseModel):

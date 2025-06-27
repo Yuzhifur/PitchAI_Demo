@@ -191,6 +191,7 @@ export default function ProjectDetailPage() {
   }, [projectId, newMissingInfo, missingInfoSaving]);
 
   const handleDeleteMissingInfo = useCallback(async (infoId: string) => {
+    console.log("entered handleDeleteMissingInfo");
     if (!confirm("确定要删除这条缺失信息吗？")) return;
 
     // FIXED: Prevent multiple deletes
@@ -651,7 +652,6 @@ export default function ProjectDetailPage() {
                               onClick={() => info.id && handleDeleteMissingInfo(info.id)}
                               disabled={!info.id || missingInfoSaving}
                               className="text-red-500 hover:text-red-700 text-sm disabled:opacity-50 flex items-center"
-                              title={!info.id ? "无法删除 - 缺少ID" : "删除这条缺失信息"}
                             >
                               {missingInfoSaving ? (
                                 <i className="fa-solid fa-spinner fa-spin"></i>
