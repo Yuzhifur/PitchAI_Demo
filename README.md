@@ -1,7 +1,7 @@
 # PitchAI - 智能项目入孵评审系统 V1.0.0
 
 PitchAI是一个基于人工智能的项目入孵评审系统，通过分析企业提交的商业计划书（BP）等信息，提供多维度评估和打分。
-项目进展文档: https://i0ra0mmh9ix.feishu.cn/docx/BWsBdwzruo4qyOxyWa5cAdPRnAf
+Test push TUN.
 
 ## 技术栈
 
