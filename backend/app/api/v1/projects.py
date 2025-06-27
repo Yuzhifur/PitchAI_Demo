@@ -17,6 +17,7 @@ from ...models.project import (
     calculate_review_result_from_score
 )
 from ...core.database import db
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -241,11 +242,12 @@ async def delete_project(project_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete project: {str(e)}")
 
+class TeamMembersUpdate(BaseModel):
+    team_members: str
 
-# NEW: Team members specific endpoint for granular updates
 @router.put("/projects/{project_id}/team-members")
-async def update_team_members(project_id: str, team_members: str):
-    """Update only team members for a project"""
+async def update_team_members(project_id: str, update_data: TeamMembersUpdate):
+    """Update only team members for a project - FIXED VERSION"""
     supabase = db.get_client()
 
     try:
@@ -260,9 +262,14 @@ async def update_team_members(project_id: str, team_members: str):
         if not existing.data:
             raise HTTPException(status_code=404, detail="Project not found")
 
+        # FIXED: Get team_members from request body object
+        team_members = update_data.team_members
+
         # Validate team members length
         if len(team_members) > 1000:
             raise HTTPException(status_code=400, detail="Team members text too long (max 1000 characters)")
+
+        print(f"💾 Updating team members for project {project_id}: {team_members[:50]}...")
 
         # Update team members
         result = supabase.table("projects").update({
@@ -271,11 +278,18 @@ async def update_team_members(project_id: str, team_members: str):
         }).eq("id", project_id).execute()
 
         if not result.data:
+            print(f"❌ Failed to update team members - no data returned")
             raise HTTPException(status_code=500, detail="Failed to update team members")
 
-        return {"message": "Team members updated successfully", "team_members": team_members}
+        print(f"✅ Successfully updated team members for project {project_id}")
+
+        return {
+            "message": "Team members updated successfully",
+            "team_members": team_members
+        }
 
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ Failed to update team members: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to update team members: {str(e)}")

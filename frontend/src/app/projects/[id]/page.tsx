@@ -34,8 +34,7 @@ export default function ProjectDetailPage() {
   const [teamError, setTeamError] = useState("");
 
   // NEW: Missing info editing states
-  const [isEditingMissingInfo, setIsEditingMissingInfo] = useState(false);
-  const [editingMissingInfo, setEditingMissingInfo] = useState<MissingInfo | null>(null);
+  const [isAddingMissingInfo, setIsAddingMissingInfo] = useState(false);
   const [newMissingInfo, setNewMissingInfo] = useState<MissingInfo>({
     dimension: "",
     information_type: "",
@@ -135,6 +134,7 @@ export default function ProjectDetailPage() {
     setTeamError("");
 
     try {
+      // FIXED: Send as JSON object, not plain text
       await projectApi.updateTeamMembers(projectId, teamMembers);
       setProject((prev: any) => ({ ...prev, team_members: teamMembers }));
       setIsEditingTeam(false);
@@ -159,6 +159,9 @@ export default function ProjectDetailPage() {
       setError("请填写缺失信息的维度和描述");
       return;
     }
+
+    // FIXED: Prevent duplicate submissions
+    if (missingInfoSaving) return;
 
     setMissingInfoSaving(true);
     setError("");
@@ -185,37 +188,14 @@ export default function ProjectDetailPage() {
     } finally {
       setMissingInfoSaving(false);
     }
-  }, [projectId, newMissingInfo]);
-
-  const handleUpdateMissingInfo = useCallback(async (infoId: string, updatedInfo: MissingInfo) => {
-    if (!updatedInfo.dimension || !updatedInfo.description) {
-      setError("请填写缺失信息的维度和描述");
-      return;
-    }
-
-    setMissingInfoSaving(true);
-    setError("");
-
-    try {
-      await missingInfoApi.update(projectId, infoId, updatedInfo);
-
-      // Update local state
-      setMissingInfo(prev => prev.map(info =>
-        info.id === infoId ? { ...info, ...updatedInfo } : info
-      ));
-
-      setEditingMissingInfo(null);
-      console.log("✅ Missing info updated successfully");
-    } catch (err: any) {
-      console.error("❌ Update missing info failed:", err);
-      setError(err.response?.data?.message || "更新缺失信息失败");
-    } finally {
-      setMissingInfoSaving(false);
-    }
-  }, [projectId]);
+  }, [projectId, newMissingInfo, missingInfoSaving]);
 
   const handleDeleteMissingInfo = useCallback(async (infoId: string) => {
+    console.log("entered handleDeleteMissingInfo");
     if (!confirm("确定要删除这条缺失信息吗？")) return;
+
+    // FIXED: Prevent multiple deletes
+    if (missingInfoSaving) return;
 
     setMissingInfoSaving(true);
     setError("");
@@ -233,7 +213,7 @@ export default function ProjectDetailPage() {
     } finally {
       setMissingInfoSaving(false);
     }
-  }, [projectId]);
+  }, [projectId, missingInfoSaving]);
 
   // Initial data loading
   useEffect(() => {
@@ -566,16 +546,16 @@ export default function ProjectDetailPage() {
                   缺失信息管理
                 </div>
                 <button
-                  onClick={() => setIsEditingMissingInfo(!isEditingMissingInfo)}
+                  onClick={() => setIsAddingMissingInfo(!isAddingMissingInfo)}
                   className="text-purple-500 hover:text-purple-700 text-sm flex items-center"
                 >
-                  <i className={`fa-solid ${isEditingMissingInfo ? 'fa-times' : 'fa-plus'} mr-1`}></i>
-                  {isEditingMissingInfo ? '取消添加' : '添加缺失信息'}
+                  <i className={`fa-solid ${isAddingMissingInfo ? 'fa-times' : 'fa-plus'} mr-1`}></i>
+                  {isAddingMissingInfo ? '取消添加' : '添加缺失信息'}
                 </button>
               </div>
 
               {/* Add New Missing Info Form */}
-              {isEditingMissingInfo && (
+              {isAddingMissingInfo && (
                 <div className="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -639,7 +619,7 @@ export default function ProjectDetailPage() {
                 </div>
               )}
 
-              {/* Missing Info List */}
+              {/* FIXED: Missing Info List - REMOVED EDITING FUNCTIONALITY */}
               <div className="space-y-3">
                 {missingInfo.length === 0 ? (
                   <div className="text-center text-gray-500 py-4">
@@ -648,103 +628,39 @@ export default function ProjectDetailPage() {
                   </div>
                 ) : (
                   missingInfo.map((info, idx) => {
-                    const isEditing = editingMissingInfo?.id === info.id;
                     const statusConfig = getMissingInfoStatusColor(info.status);
 
                     return (
                       <div key={info.id || idx} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                        {isEditing && editingMissingInfo ? (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {/* FIXED: Added null check for editingMissingInfo */}
-                            <div>
-                              <select
-                                value={editingMissingInfo.dimension || ''}
-                                onChange={(e) => setEditingMissingInfo(prev => prev ? { ...prev, dimension: e.target.value } : null)}
-                                className="w-full p-2 border border-gray-300 rounded text-sm"
-                              >
-                                <option value="团队能力">团队能力</option>
-                                <option value="产品&技术">产品&技术</option>
-                                <option value="市场前景">市场前景</option>
-                                <option value="商业模式">商业模式</option>
-                                <option value="财务情况">财务情况</option>
-                                <option value="其他">其他</option>
-                              </select>
+                        {/* REMOVED: Editing functionality - now only display */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center mb-2">
+                              <span className="font-medium text-gray-800 mr-2">{info.dimension}</span>
+                              <span className="text-gray-600 text-sm mr-2">·</span>
+                              <span className="text-gray-600 text-sm mr-2">{info.information_type}</span>
+                              <span className={`inline-block px-2 py-1 rounded-full ${statusConfig.bg} ${statusConfig.text} text-xs`}>
+                                <i className={`fa-solid ${statusConfig.icon} mr-1`}></i>
+                                {getMissingInfoStatusDisplay(info.status)}
+                              </span>
                             </div>
-                            <div>
-                              <input
-                                type="text"
-                                value={editingMissingInfo.information_type || ''}
-                                onChange={(e) => setEditingMissingInfo(prev => prev ? { ...prev, information_type: e.target.value } : null)}
-                                className="w-full p-2 border border-gray-300 rounded text-sm"
-                              />
-                            </div>
-                            <div>
-                              <select
-                                value={editingMissingInfo.status || 'pending'}
-                                onChange={(e) => setEditingMissingInfo(prev => prev ? { ...prev, status: e.target.value } : null)}
-                                className="w-full p-2 border border-gray-300 rounded text-sm"
-                              >
-                                <option value="pending">待处理</option>
-                                <option value="provided">已提供</option>
-                                <option value="resolved">已解决</option>
-                              </select>
-                            </div>
-                            <div className="md:col-span-3">
-                              <textarea
-                                value={editingMissingInfo.description || ''}
-                                onChange={(e) => setEditingMissingInfo(prev => prev ? { ...prev, description: e.target.value } : null)}
-                                className="w-full p-2 border border-gray-300 rounded text-sm resize-none"
-                                rows={2}
-                              />
-                            </div>
-                            <div className="md:col-span-3 flex space-x-2">
-                              <button
-                                onClick={() => info.id && handleUpdateMissingInfo(info.id, editingMissingInfo)}
-                                disabled={missingInfoSaving || !info.id}
-                                className="px-3 py-1 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 disabled:opacity-50"
-                              >
-                                {missingInfoSaving ? '保存中...' : '保存'}
-                              </button>
-                              <button
-                                onClick={() => setEditingMissingInfo(null)}
-                                disabled={missingInfoSaving}
-                                className="px-3 py-1 bg-gray-300 text-gray-700 rounded text-xs hover:bg-gray-400 disabled:opacity-50"
-                              >
-                                取消
-                              </button>
-                            </div>
+                            <div className="text-gray-600 text-sm">{info.description}</div>
                           </div>
-                        ) : (
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center mb-2">
-                                <span className="font-medium text-gray-800 mr-2">{info.dimension}</span>
-                                <span className="text-gray-600 text-sm mr-2">·</span>
-                                <span className="text-gray-600 text-sm mr-2">{info.information_type}</span>
-                                <span className={`inline-block px-2 py-1 rounded-full ${statusConfig.bg} ${statusConfig.text} text-xs`}>
-                                  <i className={`fa-solid ${statusConfig.icon} mr-1`}></i>
-                                  {getMissingInfoStatusDisplay(info.status)}
-                                </span>
-                              </div>
-                              <div className="text-gray-600 text-sm">{info.description}</div>
-                            </div>
-                            <div className="flex space-x-2 ml-4">
-                              <button
-                                onClick={() => setEditingMissingInfo(info)}
-                                className="text-purple-500 hover:text-purple-700 text-sm"
-                              >
-                                <i className="fa-solid fa-pen"></i>
-                              </button>
-                              <button
-                                onClick={() => info.id && handleDeleteMissingInfo(info.id)}
-                                disabled={!info.id}
-                                className="text-red-500 hover:text-red-700 text-sm disabled:opacity-50"
-                              >
+                          <div className="flex space-x-2 ml-4">
+                            {/* REMOVED: Edit button - only delete now */}
+                            <button
+                              onClick={() => info.id && handleDeleteMissingInfo(info.id)}
+                              disabled={!info.id || missingInfoSaving}
+                              className="text-red-500 hover:text-red-700 text-sm disabled:opacity-50 flex items-center"
+                            >
+                              {missingInfoSaving ? (
+                                <i className="fa-solid fa-spinner fa-spin"></i>
+                              ) : (
                                 <i className="fa-solid fa-trash"></i>
-                              </button>
-                            </div>
+                              )}
+                            </button>
                           </div>
-                        )}
+                        </div>
                       </div>
                     );
                   })

@@ -127,9 +127,12 @@ export const projectApi: ExtendedProjectApi = {
 
   // FIXED: Team members update function properly declared
   updateTeamMembers: async (projectId: string, teamMembers: string): Promise<ApiResponse<any>> => {
-    const response = await api.put<ApiResponse<any>>(`/projects/${projectId}/team-members`, teamMembers, {
+    // FIXED: Send as JSON object instead of plain text
+    const response = await api.put<ApiResponse<any>>(`/projects/${projectId}/team-members`, {
+      team_members: teamMembers  // FIXED: Wrap in object
+    }, {
       headers: {
-        'Content-Type': 'text/plain',
+        'Content-Type': 'application/json',  // FIXED: Use JSON content type
       },
     });
     return handleResponse(response);
@@ -192,46 +195,56 @@ export const missingInfoApi = {
     return handleResponse(response);
   },
 
-  // Get specific missing information record
-  getDetail: async (projectId: string, infoId: string): Promise<ApiResponse<MissingInfo>> => {
-    const response = await api.get<ApiResponse<MissingInfo>>(`/projects/${projectId}/missing-information/${infoId}`);
-    return handleResponse(response);
-  },
-
   // Add new missing information
   create: async (projectId: string, data: MissingInfoCreateData): Promise<ApiResponse<any>> => {
-    const response = await api.post<ApiResponse<any>>(`/projects/${projectId}/missing-information`, data);
-    return handleResponse(response);
-  },
+    try {
+      console.log('📤 Creating missing info:', data);
+      const response = await api.post<ApiResponse<any>>(`/projects/${projectId}/missing-information`, data);
+      console.log('✅ Missing info created successfully:', response.data);
+      return handleResponse(response);
+    } catch (error: any) {
+      console.error('❌ Failed to create missing info:', error);
 
-  // Update existing missing information
-  update: async (projectId: string, infoId: string, data: MissingInfoUpdateData): Promise<ApiResponse<any>> => {
-    const response = await api.put<ApiResponse<any>>(`/projects/${projectId}/missing-information/${infoId}`, data);
-    return handleResponse(response);
-  },
-
-  // Update only status
-  updateStatus: async (projectId: string, infoId: string, status: string): Promise<ApiResponse<any>> => {
-    const response = await api.patch<ApiResponse<any>>(`/projects/${projectId}/missing-information/${infoId}/status`, { status });
-    return handleResponse(response);
+      // FIXED: Provide more specific error messages
+      if (error.response?.status === 409) {
+        throw new Error('此缺失信息已存在，请勿重复添加');
+      } else if (error.response?.status === 400) {
+        throw new Error('请填写完整的缺失信息内容');
+      } else if (error.response?.status === 404) {
+        throw new Error('项目不存在');
+      } else {
+        throw new Error(error.response?.data?.message || '添加缺失信息失败');
+      }
+    }
   },
 
   // Delete missing information
   delete: async (projectId: string, infoId: string): Promise<ApiResponse<any>> => {
-    const response = await api.delete<ApiResponse<any>>(`/projects/${projectId}/missing-information/${infoId}`);
-    return handleResponse(response);
+    try {
+      console.log('🗑️ Deleting missing info:', infoId);
+
+      if (!infoId) {
+        throw new Error('缺失信息ID不能为空');
+      }
+
+      const response = await api.delete<ApiResponse<any>>(`/projects/${projectId}/missing-information/${infoId}`);
+      console.log('✅ Missing info deleted successfully:', response.data);
+      return handleResponse(response);
+    } catch (error: any) {
+      console.error('❌ Failed to delete missing info:', error);
+
+      // FIXED: Provide more specific error messages
+      if (error.response?.status === 404) {
+        throw new Error('要删除的缺失信息不存在');
+      } else {
+        throw new Error(error.response?.data?.message || '删除缺失信息失败');
+      }
+    }
   },
 
-  // Bulk operations
-  bulkAdd: async (projectId: string, items: MissingInfoCreateData[]): Promise<ApiResponse<any>> => {
-    const response = await api.post<ApiResponse<any>>(`/projects/${projectId}/missing-information/bulk`, items);
-    return handleResponse(response);
-  },
-
-  bulkDelete: async (projectId: string, infoIds: string[]): Promise<ApiResponse<any>> => {
-    const response = await api.delete<ApiResponse<any>>(`/projects/${projectId}/missing-information/bulk`, {
-      data: infoIds
-    });
+  // Get specific missing information record (if needed)
+  getDetail: async (projectId: string, infoId: string): Promise<ApiResponse<MissingInfo>> => {
+    const response = await api.get<ApiResponse<MissingInfo>>(`/projects/${projectId}/missing-information/${infoId}`);
     return handleResponse(response);
   },
 };
