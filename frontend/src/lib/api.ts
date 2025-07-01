@@ -13,20 +13,40 @@ import type {
   ScoreSummary,
   ApiResponse,
   ScoreHistoryResponse,
-  // FIXED: Added missing imports
   MissingInfo,
   MissingInfoCreateData,
   MissingInfoUpdateData
 } from './types';
 
-// Create axios instance with base configuration
+// API URL configuration - now supports Railway backend
+const getApiBaseUrl = (): string => {
+  // Check if we're in the browser
+  if (typeof window !== 'undefined') {
+    // Production: Use Railway backend URL
+    if (process.env.NODE_ENV === 'production') {
+      return process.env.NEXT_PUBLIC_API_URL || 'https://your-app-name.railway.app/api/v1';
+    }
+    // Development: Use local backend
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+  }
+
+  // Server-side rendering fallback
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+};
+
+// Create axios instance with dynamic base URL
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
-  timeout: 150000,
+  baseURL: getApiBaseUrl(),
+  timeout: 150000, // 2.5 minutes timeout for Railway cold starts
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Log the API URL in development
+if (process.env.NODE_ENV === 'development') {
+  console.log('🌐 API Base URL:', getApiBaseUrl());
+}
 
 // Request interceptor to add auth token
 api.interceptors.request.use((config) => {
@@ -34,25 +54,41 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Add additional headers for Railway
+  config.headers['X-Requested-With'] = 'XMLHttpRequest';
+
   return config;
 });
 
-// Response interceptor for error handling
+// Response interceptor for error handling with Railway-specific handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Handle Railway-specific errors
+    if (error.code === 'ECONNABORTED') {
+      console.error('🚨 Request timeout - Railway backend might be cold starting');
+    }
+
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      // Redirect to login page
-      window.location.href = '/login';
+      // Only redirect if we're in the browser
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
+
+    // Log Railway deployment issues
+    if (error.response?.status === 503 || error.response?.status === 502) {
+      console.error('🚨 Railway backend unavailable - check deployment status');
+    }
+
     return Promise.reject(error);
   }
 );
 
 // Helper function to handle API responses
 const handleResponse = <T>(response: AxiosResponse<any>): ApiResponse<T> => {
-
   // Check if response already has the expected structure
   if (response.data && typeof response.data === 'object' && 'code' in response.data) {
     return response.data;
@@ -64,6 +100,17 @@ const handleResponse = <T>(response: AxiosResponse<any>): ApiResponse<T> => {
     message: 'success',
     data: response.data
   };
+};
+
+// Health check function for Railway backend
+export const healthCheck = async (): Promise<boolean> => {
+  try {
+    const response = await api.get('/ping');
+    return response.status === 200;
+  } catch (error) {
+    console.error('🚨 Health check failed:', error);
+    return false;
+  }
 };
 
 // FIXED: Declare extended interfaces to avoid property assignment errors
@@ -89,32 +136,27 @@ interface ExtendedScoreApi {
 }
 
 // Project API
-export const projectApi: ExtendedProjectApi = {
-  // Get project statistics for dashboard
+export const projectApi = {
   getStatistics: async (): Promise<ApiResponse<ProjectStatistics>> => {
     const response = await api.get<ApiResponse<ProjectStatistics>>('/projects/statistics');
     return handleResponse(response);
   },
 
-  // List projects with pagination and filtering
   list: async (params: ProjectListParams = {}): Promise<ApiResponse<ProjectListResponse>> => {
     const response = await api.get<ApiResponse<ProjectListResponse>>('/projects', { params });
     return handleResponse(response);
   },
 
-  // Create a new project
   create: async (data: ProjectCreateData): Promise<ApiResponse<Project>> => {
     const response = await api.post<ApiResponse<Project>>('/projects', data);
     return handleResponse(response);
   },
 
-  // Get project details
   getDetail: async (projectId: string): Promise<ApiResponse<Project>> => {
     const response = await api.get<ApiResponse<Project>>(`/projects/${projectId}`);
     return handleResponse(response);
   },
 
-  // Update project
   update: async (projectId: string, data: Partial<ProjectCreateData>): Promise<ApiResponse<Project>> => {
     const response = await api.put<ApiResponse<Project>>(`/projects/${projectId}`, data);
     return handleResponse(response);
@@ -125,14 +167,12 @@ export const projectApi: ExtendedProjectApi = {
     return handleResponse(response);
   },
 
-  // FIXED: Team members update function properly declared
   updateTeamMembers: async (projectId: string, teamMembers: string): Promise<ApiResponse<any>> => {
-    // FIXED: Send as JSON object instead of plain text
     const response = await api.put<ApiResponse<any>>(`/projects/${projectId}/team-members`, {
-      team_members: teamMembers  // FIXED: Wrap in object
+      team_members: teamMembers
     }, {
       headers: {
-        'Content-Type': 'application/json',  // FIXED: Use JSON content type
+        'Content-Type': 'application/json',
       },
     });
     return handleResponse(response);
