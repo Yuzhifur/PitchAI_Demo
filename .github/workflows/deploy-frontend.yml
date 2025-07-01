@@ -49,9 +49,14 @@ jobs:
         NEXT_PUBLIC_API_URL: ${{ secrets.RAILWAY_BACKEND_URL || 'https://your-app-name.railway.app/api/v1' }}
         NEXT_PUBLIC_APP_MODE: production
         NODE_ENV: production
+        NEXT_EXPORT: true  # Enable static export for GitHub Pages
       run: |
         cd frontend
+        cp next.config.github.js next.config.js
+        node scripts/prepare-static-export.js
         npm run build
+        node scripts/restore-dynamic-routes.js
+        cp next.config.vercel.js next.config.js
 
     - name: Upload build artifacts
       uses: actions/upload-pages-artifact@v3

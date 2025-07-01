@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build:static": "NEXT_EXPORT=true node scripts/prepare-static-export.js && next build && node scripts/restore-dynamic-routes.js",
+    "build:full": "next build",
+    "deploy:vercel": "node scripts/deploy-mode.js full && vercel",
+    "deploy:static": "node scripts/deploy-mode.js static && npm run build:static"
   },
   "dependencies": {
     "axios": "^1.6.7",
