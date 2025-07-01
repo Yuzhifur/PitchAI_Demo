@@ -1,4 +1,4 @@
-# File: backend/app/main.py
+# backend/app/main.py - Updated for Railway deployment
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,64 +7,83 @@ import os
 from .core.config.settings import settings
 from .api.v1 import business_plans, evaluations, projects, scores
 
-# 加载环境变量
+# Load environment variables
 load_dotenv()
 
-# 创建FastAPI应用
+# Create FastAPI application
 app = FastAPI(
-    title="PitchAI 后端 API",
+    title="PitchAI Backend API",
     description="PitchAI项目评审系统后端API",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# 配置CORS - MOVED TO TOP AND IMPROVED
+# CORS configuration for Railway + GitHub Pages deployment
+allowed_origins = [
+    "http://localhost:3000",  # Local development
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",  # Mock server
+    "http://127.0.0.1:3001",
+]
+
+# Add production GitHub Pages origin if configured
+github_pages_url = os.getenv("GITHUB_PAGES_URL")
+if github_pages_url:
+    allowed_origins.append(github_pages_url)
+    # Also add common GitHub Pages patterns
+    allowed_origins.extend([
+        "https://*.github.io",  # Allow all GitHub Pages subdomains
+        "https://yuzhifur.github.io",  # Will be replaced with actual username
+    ])
+
+# In production, allow the specific GitHub Pages URL
+if settings.APP_ENV == "production":
+    # Add your specific GitHub Pages URL here
+    allowed_origins.extend([
+        "https://yuzhifur.github.io",  # Replace with your actual GitHub username
+        "https://yuzhifur.github.io/PitchAI_Demo",  # Replace with your repo name
+    ])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Next.js dev server
-        "http://127.0.0.1:3000",  # Alternative localhost
-        "http://localhost:3001",  # Mock server
-        "http://127.0.0.1:3001",  # Alternative localhost
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
-# Alternative: Allow all origins for development (less secure but simpler)
-# Uncomment this and comment out the above if you still have issues:
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_credentials=False,  # Must be False when allow_origins=["*"]
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-
-# 健康检查
-@app.get("/ping", tags=["Health"])
-def health_check():
-    return {"status": "ok", "version": "1.0.0"}
-
-# 根路径重定向到文档
+# Health check endpoints
 @app.get("/", tags=["Root"])
 def read_root():
     return {
         "message": "PitchAI API Server",
         "version": "1.0.0",
+        "status": "running",
+        "environment": settings.APP_ENV,
         "docs": "/docs",
         "health": "/ping"
     }
 
-# API健康检查
+@app.get("/ping", tags=["Health"])
+def health_check():
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "environment": settings.APP_ENV
+    }
+
 @app.get(f"{settings.API_PREFIX}/ping", tags=["Health"])
 def health_check_api():
-    return {"status": "ok", "version": "1.0.0", "api_prefix": settings.API_PREFIX}
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "api_prefix": settings.API_PREFIX,
+        "environment": settings.APP_ENV
+    }
 
-# 注册路由
+# Register API routes
 app.include_router(
     projects.router, prefix=settings.API_PREFIX, tags=["项目管理"]
 )
@@ -81,6 +100,8 @@ app.include_router(
     evaluations.router, prefix=settings.API_PREFIX, tags=["评估"]
 )
 
+# Railway deployment requires the app to be available as 'app'
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=settings.PORT, reload=settings.DEBUG)
+    port = int(os.getenv("PORT", 8000))  # Railway sets PORT automatically
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)

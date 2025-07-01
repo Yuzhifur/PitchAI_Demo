@@ -11,3 +11,4 @@ PyPDF2  # For PDF text extraction
 supabase
 pydantic
 pydantic-settings
+python-multipart  # Required for file uploads (UploadFile)
