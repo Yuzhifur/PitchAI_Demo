@@ -20,18 +20,21 @@ import type {
 
 // API URL configuration - now supports Railway backend
 const getApiBaseUrl = (): string => {
+  // Production Railway URL with fallback
+  const railwayUrl = 'https://pitchai-production.up.railway.app/api/v1';
+  
   // Check if we're in the browser
   if (typeof window !== 'undefined') {
     // Production: Use Railway backend URL
     if (process.env.NODE_ENV === 'production') {
-      return process.env.NEXT_PUBLIC_API_URL || 'https://your-app-name.railway.app/api/v1';
+      return process.env.NEXT_PUBLIC_API_URL || railwayUrl;
     }
     // Development: Use local backend
     return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
   }
 
   // Server-side rendering fallback
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+  return process.env.NEXT_PUBLIC_API_URL || railwayUrl;
 };
 
 // Create axios instance with dynamic base URL
@@ -43,10 +46,10 @@ const api = axios.create({
   },
 });
 
-// Log the API URL in development
-if (process.env.NODE_ENV === 'development') {
-  console.log('🌐 API Base URL:', getApiBaseUrl());
-}
+// Log the API URL in all environments for debugging
+console.log('🌐 API Base URL:', getApiBaseUrl());
+console.log('🌐 NODE_ENV:', process.env.NODE_ENV);
+console.log('🌐 NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
 
 // Request interceptor to add auth token
 api.interceptors.request.use((config) => {
