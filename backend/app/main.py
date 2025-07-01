@@ -1,6 +1,6 @@
 # backend/app/main.py - Updated for Railway deployment
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
@@ -46,20 +46,29 @@ if settings.APP_ENV == "production":
     allowed_origins.extend([
         "https://yuzhifur.github.io",  # Replace with your actual GitHub username
         "https://yuzhifur.github.io/PitchAI_Demo",  # Replace with your repo name
-        # Vercel deployments
+        # Vercel deployments - explicit URLs only (no wildcards)
         "https://pitchai-okn8cl0rm-yuzhifurs-projects.vercel.app",
         "https://pitchai-yuzhifur-yuzhifurs-projects.vercel.app",
-        "https://*.vercel.app",  # Allow all Vercel preview deployments
     ])
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=3600,  # Cache preflight for 1 hour
 )
+
+# Global OPTIONS handler for CORS preflight requests
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str, request: Request):
+    """Handle OPTIONS requests for CORS preflight"""
+    print(f"🔄 OPTIONS request for: {full_path}")
+    print(f"🔄 Origin: {request.headers.get('origin', 'No origin')}")
+    print(f"🔄 Allowed origins: {allowed_origins}")
+    return {"message": "OK"}
 
 # Health check endpoints
 @app.get("/", tags=["Root"])
