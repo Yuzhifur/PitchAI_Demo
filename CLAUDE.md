@@ -125,6 +125,36 @@ The system evaluates business plans across 5 dimensions (total 100 points):
 - 60-80: Meets basic requirements (office registration)
 - Above 80: Excellent project (office space consideration)
 
+## Deployment Architecture
+
+### Backend (Railway)
+- **Production URL**: Hosted on Railway platform
+- **Environment**: Production-ready with PostgreSQL database
+- **API Endpoints**: Available at `https://your-railway-app.railway.app/api/v1`
+
+### Frontend Deployment Options
+
+#### 1. GitHub Pages (Static Export)
+- **Limitation**: Dynamic routes (`/projects/[id]`) are disabled during build
+- **Features Available**: Dashboard, history, new project creation, login
+- **Features Unavailable**: Project detail pages, report generation
+- **Use Case**: Demo/presentation purposes with limited functionality
+
+#### 2. Vercel/Netlify (Full Functionality)
+- **Recommended**: Supports all Next.js features including dynamic routes
+- **Features Available**: Complete application functionality
+- **Backend Connection**: Connects to Railway-hosted backend via API calls
+
+### GitHub Pages Build Process
+The build system automatically handles static export limitations:
+1. `NEXT_EXPORT=true` environment variable triggers conditional configuration
+2. Dynamic routes are temporarily disabled during GitHub Pages build
+3. Routes are restored after build for development use
+
+**Build Scripts:**
+- `scripts/prepare-static-export.js` - Disables dynamic routes for static export
+- `scripts/restore-dynamic-routes.js` - Restores dynamic routes post-build
+
 ## Development Notes
 
 - API base URL defaults to `http://localhost:8000/api/v1`
@@ -133,3 +163,4 @@ The system evaluates business plans across 5 dimensions (total 100 points):
 - Database migrations are in `backend/supabase/migrations/`
 - Authentication uses JWT tokens stored in localStorage
 - All user-facing text is in Chinese
+- **Important**: For full functionality, deploy frontend to Vercel/Netlify instead of GitHub Pages

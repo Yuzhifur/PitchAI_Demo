@@ -19,12 +19,15 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS configuration for Railway + GitHub Pages deployment
+# CORS configuration for Railway + GitHub Pages + Vercel deployment
 allowed_origins = [
     "http://localhost:3000",  # Local development
     "http://127.0.0.1:3000",
     "http://localhost:3001",  # Mock server
     "http://127.0.0.1:3001",
+    # Vercel deployments (works in all environments)
+    "https://pitchai-okn8cl0rm-yuzhifurs-projects.vercel.app",
+    "https://pitchai-yuzhifur-yuzhifurs-projects.vercel.app",
 ]
 
 # Add production GitHub Pages origin if configured
@@ -37,12 +40,16 @@ if github_pages_url:
         "https://yuzhifur.github.io",  # Will be replaced with actual username
     ])
 
-# In production, allow the specific GitHub Pages URL
+# In production, allow the specific GitHub Pages URL and Vercel deployments
 if settings.APP_ENV == "production":
     # Add your specific GitHub Pages URL here
     allowed_origins.extend([
         "https://yuzhifur.github.io",  # Replace with your actual GitHub username
         "https://yuzhifur.github.io/PitchAI_Demo",  # Replace with your repo name
+        # Vercel deployments
+        "https://pitchai-okn8cl0rm-yuzhifurs-projects.vercel.app",
+        "https://pitchai-yuzhifur-yuzhifurs-projects.vercel.app",
+        "https://*.vercel.app",  # Allow all Vercel preview deployments
     ])
 
 app.add_middleware(
