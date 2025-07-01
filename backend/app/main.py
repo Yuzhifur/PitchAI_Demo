@@ -27,6 +27,7 @@ allowed_origins = [
     "http://127.0.0.1:3001",
     # Vercel deployments (works in all environments)
     "https://pitchai-okn8cl0rm-yuzhifurs-projects.vercel.app",
+    "https://pitchai-yuzhifur-yuzhifurs-projects.vercel.app",
 ]
 
 # Add production GitHub Pages origin if configured
@@ -47,6 +48,7 @@ if settings.APP_ENV == "production":
         "https://yuzhifur.github.io/PitchAI_Demo",  # Replace with your repo name
         # Vercel deployments
         "https://pitchai-okn8cl0rm-yuzhifurs-projects.vercel.app",
+        "https://pitchai-yuzhifur-yuzhifurs-projects.vercel.app",
         "https://*.vercel.app",  # Allow all Vercel preview deployments
     ])
 
