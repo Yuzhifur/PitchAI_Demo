@@ -26,7 +26,6 @@ allowed_origins = [
     "http://localhost:3001",  # Mock server
     "http://127.0.0.1:3001",
     # Vercel deployments (works in all environments)
-    "https://pitchai-okn8cl0rm-yuzhifurs-projects.vercel.app",
     "https://pitchai-yuzhifur-yuzhifurs-projects.vercel.app",
 ]
 
@@ -47,8 +46,12 @@ if settings.APP_ENV == "production":
         "https://yuzhifur.github.io",  # Replace with your actual GitHub username
         "https://yuzhifur.github.io/PitchAI_Demo",  # Replace with your repo name
         # Vercel deployments - explicit URLs only (no wildcards)
-        "https://pitchai-okn8cl0rm-yuzhifurs-projects.vercel.app",
+        "https://pitchai-9r7mn0z9o-yuzhifurs-projects.vercel.app",
         "https://pitchai-yuzhifur-yuzhifurs-projects.vercel.app",
+        "https://pitchai-orpin.vercel.app",
+        "pitchai-9r7mn0z9o-yuzhifurs-projects.vercel.app",
+        "pitchai-yuzhifur-yuzhifurs-projects.vercel.app",
+        "pitchai-orpin.vercel.app",
     ])
 
 app.add_middleware(
